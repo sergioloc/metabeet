@@ -1,18 +1,111 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../bloc/home_bloc.dart';
 import '../widgets/app_toolbar.dart';
+import '../widgets/folder_tree_view.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const AppToolbar(appName: 'Metabeet'),
-      body: Center(
-        child: Text(
-          'Importa un archivo de audio para editar su metadatos',
-          style: Theme.of(context).textTheme.bodyLarge,
+    return BlocBuilder<HomeBloc, HomeState>(
+      builder: (context, state) {
+        return Scaffold(
+          appBar: AppToolbar(
+            appName: 'Metabeet',
+            onImportPressed: state.status == HomeStatus.loading
+                ? null
+                : () => context
+                    .read<HomeBloc>()
+                    .add(const ImportFolderPressed()),
+          ),
+          body: switch (state.status) {
+            HomeStatus.initial => const _EmptyState(),
+            HomeStatus.loading =>
+              const Center(child: CircularProgressIndicator()),
+            HomeStatus.error => _ErrorState(message: state.error),
+            HomeStatus.ready => FolderTreeView(
+                rootFolder: state.selectedFolder!,
+                rootChildren: state.rootFolders,
+                loadChildren: (path) =>
+                    context.read<HomeBloc>().loadSubfolders(path),
+              ),
+          },
+        );
+      },
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.folder_open_outlined,
+            size: 64,
+            color: colorScheme.outline,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Pulsa "Importar" para seleccionar una carpeta',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({this.message});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+            const SizedBox(height: 16),
+            Text(
+              'No se pudo importar la carpeta',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            if (message != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => context
+                  .read<HomeBloc>()
+                  .add(const ImportFolderPressed()),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Intentar de nuevo'),
+            ),
+          ],
         ),
       ),
     );
