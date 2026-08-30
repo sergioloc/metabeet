@@ -4,11 +4,14 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/audio_file_entity.dart';
+import '../../domain/entities/file_rename_request.dart';
 import '../../domain/entities/folder_entity.dart';
 import '../../domain/usecases/get_audio_files.dart';
 import '../../domain/usecases/get_cover_art.dart';
 import '../../domain/usecases/get_folder_subfolders.dart';
 import '../../domain/usecases/import_folder.dart';
+import '../../domain/usecases/rename_files.dart';
+import '../../util/path_utils.dart';
 
 enum HomeStatus { initial, loading, ready, error }
 
@@ -23,6 +26,9 @@ class HomeState extends Equatable {
     this.audioStatus = AudioStatus.idle,
     this.audioFiles = const [],
     this.audioError,
+    this.pendingRenames = const {},
+    this.isSaving = false,
+    this.notice,
   });
 
   final HomeStatus status;
@@ -32,6 +38,11 @@ class HomeState extends Equatable {
   final AudioStatus audioStatus;
   final List<AudioFileEntity> audioFiles;
   final String? audioError;
+  final Map<String, String> pendingRenames;
+  final bool isSaving;
+  final String? notice;
+
+  static const Object _unset = Object();
 
   HomeState copyWith({
     HomeStatus? status,
@@ -41,6 +52,9 @@ class HomeState extends Equatable {
     AudioStatus? audioStatus,
     List<AudioFileEntity>? audioFiles,
     String? audioError,
+    Map<String, String>? pendingRenames,
+    bool? isSaving,
+    Object? notice = _unset,
   }) {
     return HomeState(
       status: status ?? this.status,
@@ -50,6 +64,9 @@ class HomeState extends Equatable {
       audioStatus: audioStatus ?? this.audioStatus,
       audioFiles: audioFiles ?? this.audioFiles,
       audioError: audioError ?? this.audioError,
+      pendingRenames: pendingRenames ?? this.pendingRenames,
+      isSaving: isSaving ?? this.isSaving,
+      notice: identical(notice, _unset) ? this.notice : notice as String?,
     );
   }
 
@@ -62,6 +79,9 @@ class HomeState extends Equatable {
         audioStatus,
         audioFiles,
         audioError,
+        pendingRenames,
+        isSaving,
+        notice,
       ];
 }
 
@@ -85,21 +105,43 @@ class FolderSelected extends HomeEvent {
   List<Object?> get props => [folder];
 }
 
+class SwapRequested extends HomeEvent {
+  const SwapRequested(this.path);
+
+  final String path;
+
+  @override
+  List<Object?> get props => [path];
+}
+
+class SavePendingRenames extends HomeEvent {
+  const SavePendingRenames();
+}
+
+class NoticeShown extends HomeEvent {
+  const NoticeShown();
+}
+
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
   HomeBloc({
     required this.importFolder,
     required this.getFolderSubfolders,
     required this.getAudioFiles,
     required this.getCoverArt,
+    required this.renameFiles,
   }) : super(const HomeState()) {
     on<ImportFolderPressed>(_onImportFolderPressed);
     on<FolderSelected>(_onFolderSelected);
+    on<SwapRequested>(_onSwapRequested);
+    on<SavePendingRenames>(_onSavePendingRenames);
+    on<NoticeShown>(_onNoticeShown);
   }
 
   final ImportFolderUseCase importFolder;
   final GetFolderSubfoldersUseCase getFolderSubfolders;
   final GetAudioFilesUseCase getAudioFiles;
   final GetCoverArtUseCase getCoverArt;
+  final RenameFilesUseCase renameFiles;
 
   Future<void> _onImportFolderPressed(
     ImportFolderPressed event,
@@ -176,4 +218,65 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       getFolderSubfolders(path);
 
   Future<Uint8List?> loadCoverArt(String path) => getCoverArt(path);
+
+  void _onSwapRequested(SwapRequested event, Emitter<HomeState> emit) {
+    final pending = Map<String, String>.of(state.pendingRenames);
+    if (pending.remove(event.path) == null) {
+      final newPath = swapNamePath(event.path);
+      if (newPath != null) {
+        pending[event.path] = newPath;
+      }
+    }
+    emit(state.copyWith(pendingRenames: pending));
+  }
+
+  Future<void> _onSavePendingRenames(
+    SavePendingRenames event,
+    Emitter<HomeState> emit,
+  ) async {
+    final pending = state.pendingRenames;
+    if (pending.isEmpty || state.isSaving) return;
+
+    emit(state.copyWith(isSaving: true));
+    try {
+      await renameFiles([
+        for (final entry in pending.entries)
+          FileRenameRequest(oldPath: entry.key, newPath: entry.value),
+      ]);
+
+      final folder = state.selectedFolder;
+      if (folder == null) {
+        emit(state.copyWith(
+          pendingRenames: const {},
+          isSaving: false,
+          notice: 'Changes saved',
+        ));
+        return;
+      }
+
+      emit(state.copyWith(
+        pendingRenames: const {},
+        isSaving: false,
+        audioStatus: AudioStatus.loading,
+        audioFiles: const [],
+      ));
+      await _loadAudioFiles(folder, emit);
+      if (!isClosed) {
+        emit(state.copyWith(notice: 'Changes saved'));
+      }
+    } catch (error) {
+      if (!isClosed) {
+        emit(state.copyWith(
+          isSaving: false,
+          notice: 'Could not save the changes',
+        ));
+      }
+    }
+  }
+
+  void _onNoticeShown(NoticeShown event, Emitter<HomeState> emit) {
+    if (state.notice != null) {
+      emit(state.copyWith(notice: null));
+    }
+  }
 }

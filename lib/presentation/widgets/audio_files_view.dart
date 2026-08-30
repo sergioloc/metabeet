@@ -16,6 +16,8 @@ class AudioFilesView extends StatefulWidget {
     required this.status,
     required this.files,
     required this.loadCoverArt,
+    required this.pendingRenames,
+    required this.onSwap,
     this.error,
     this.onRetry,
   });
@@ -24,6 +26,8 @@ class AudioFilesView extends StatefulWidget {
   final AudioStatus status;
   final List<AudioFileEntity> files;
   final Future<Uint8List?> Function(String path) loadCoverArt;
+  final Map<String, String> pendingRenames;
+  final void Function(String path) onSwap;
   final String? error;
   final VoidCallback? onRetry;
 
@@ -217,10 +221,12 @@ class _AudioFilesViewState extends State<AudioFilesView> {
         return ListView.separated(
           itemCount: files.length,
           separatorBuilder: (context, index) => const Divider(height: 1),
-          itemBuilder: (context, index) {
+itemBuilder: (context, index) {
             final file = files[index];
-            final displayName = nameWithoutExtension(file.path);
+            final displayName =
+                nameWithoutExtension(widget.pendingRenames[file.path] ?? file.path);
             final hasSingleDash = displayName.split('-').length - 1 == 1;
+            final isPendingSwap = widget.pendingRenames.containsKey(file.path);
             return ListTile(
               dense: true,
               leading: _TrackArtwork(
@@ -262,13 +268,22 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                       displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: isPendingSwap
+                          ? TextStyle(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            )
+                          : null,
                     ),
                   ),
                   if (hasSingleDash)
                     IconButton(
-                      onPressed: () {},
+                      onPressed: () => widget.onSwap(file.path),
                       icon: const Icon(Icons.swap_horiz, size: 18),
-                      color: colorScheme.onSurfaceVariant,
+                      tooltip: isPendingSwap ? 'Undo' : 'Swap',
+                      color: isPendingSwap
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(
                         minWidth: 32,

@@ -5,10 +5,14 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.appName,
     this.onImportPressed,
+    this.onSavePressed,
+    this.saveCount = 0,
   });
 
   final String appName;
   final VoidCallback? onImportPressed;
+  final VoidCallback? onSavePressed;
+  final int saveCount;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -38,10 +42,23 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 16),
-          child: FilledButton.icon(
-            onPressed: onImportPressed,
-            icon: const Icon(Icons.file_upload_outlined, size: 18),
-            label: const Text('Import'),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (saveCount > 0) ...[
+                FilledButton.icon(
+                  onPressed: onSavePressed,
+                  icon: const Icon(Icons.save_outlined, size: 18),
+                  label: Text('Save ($saveCount)'),
+                ),
+                const SizedBox(width: 8),
+              ],
+              FilledButton.icon(
+                onPressed: onImportPressed,
+                icon: const Icon(Icons.file_upload_outlined, size: 18),
+                label: const Text('Import'),
+              ),
+            ],
           ),
         ),
       ],

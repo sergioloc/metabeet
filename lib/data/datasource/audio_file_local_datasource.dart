@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 
+import '../../domain/entities/file_rename_request.dart';
 import '../../domain/enum/audio_format.dart';
 import '../../util/path_utils.dart';
 import '../model/audio_file_model.dart';
@@ -14,6 +15,8 @@ abstract class AudioFileLocalDataSource {
   Future<List<AudioFileModel>> getAudioFiles(String path);
 
   Future<Uint8List?> getCoverArt(String path);
+
+  Future<void> renameFiles(List<FileRenameRequest> requests);
 }
 
 /// Reads cover art off the UI thread and caches recent results.
@@ -101,5 +104,53 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
         return null;
       }
     });
+  }
+
+  @override
+  Future<void> renameFiles(List<FileRenameRequest> requests) async {
+    final sources = {for (final r in requests) r.oldPath};
+    final targets = <String>{};
+    for (final r in requests) {
+      if (r.oldPath == r.newPath) continue;
+      if (!targets.add(r.newPath)) {
+        throw StateError('Duplicate target path: ${r.newPath}');
+      }
+      if (File(r.newPath).existsSync() && !sources.contains(r.newPath)) {
+        throw StateError('Target already exists: ${r.newPath}');
+      }
+    }
+
+    final renames = <({String oldPath, String tempPath, String newPath})>[];
+    for (var i = 0; i < requests.length; i++) {
+      final r = requests[i];
+      if (r.oldPath == r.newPath) continue;
+      renames.add((
+        oldPath: r.oldPath,
+        tempPath: '${r.oldPath}.swap.tmp.$i',
+        newPath: r.newPath,
+      ));
+    }
+
+    final done = <({String oldPath, String tempPath, String newPath})>[];
+    try {
+      for (final r in renames) {
+        if (!File(r.oldPath).existsSync()) {
+          throw StateError('Source not found: ${r.oldPath}');
+        }
+        File(r.oldPath).renameSync(r.tempPath);
+        done.add(r);
+      }
+      for (final r in done) {
+        File(r.tempPath).renameSync(r.newPath);
+      }
+    } catch (error) {
+      for (final r in done) {
+        final tempFile = File(r.tempPath);
+        if (tempFile.existsSync()) {
+          tempFile.renameSync(r.oldPath);
+        }
+      }
+      rethrow;
+    }
   }
 }

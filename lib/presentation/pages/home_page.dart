@@ -12,53 +12,75 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<HomeBloc, HomeState>(
-      builder: (context, state) {
-        return Scaffold(
-          appBar: AppToolbar(
-            appName: 'Metabeet',
-            onImportPressed: state.status == HomeStatus.loading
-                ? null
-                : () => context
-                    .read<HomeBloc>()
-                    .add(const ImportFolderPressed()),
-          ),
-          body: switch (state.status) {
-            HomeStatus.initial => const _EmptyState(),
-            HomeStatus.loading =>
-              const Center(child: CircularProgressIndicator()),
-            HomeStatus.error => _ErrorState(message: state.error),
-            HomeStatus.ready => ResizableSplit(
-                left: FolderTreeView(
-                  rootFolder: state.selectedFolder!,
-                  rootChildren: state.rootFolders,
-                  loadChildren: (path) =>
-                      context.read<HomeBloc>().loadSubfolders(path),
-                  selectedFolderPath: state.selectedFolder?.path,
-                  onFolderSelected: (folder) => context
-                      .read<HomeBloc>()
-                      .add(FolderSelected(folder)),
-                ),
-                right: AudioFilesView(
-                  folderName: state.selectedFolder?.name,
-                  status: state.audioStatus,
-                  files: state.audioFiles,
-                  loadCoverArt: (path) =>
-                      context.read<HomeBloc>().loadCoverArt(path),
-                  error: state.audioError,
-                  onRetry: () {
-                    final folder = state.selectedFolder;
-                    if (folder != null) {
-                      context
-                          .read<HomeBloc>()
-                          .add(FolderSelected(folder));
-                    }
-                  },
-                ),
-              ),
-          },
-        );
+    return BlocListener<HomeBloc, HomeState>(
+      listener: (context, state) {
+        final notice = state.notice;
+        if (notice != null) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(content: Text(notice)));
+          context.read<HomeBloc>().add(const NoticeShown());
+        }
       },
+      child: BlocBuilder<HomeBloc, HomeState>(
+        builder: (context, state) {
+          return Scaffold(
+            appBar: AppToolbar(
+              appName: 'Metabeet',
+              onImportPressed: state.status == HomeStatus.loading ||
+                      state.isSaving
+                  ? null
+                  : () => context
+                      .read<HomeBloc>()
+                      .add(const ImportFolderPressed()),
+              onSavePressed: state.pendingRenames.isEmpty || state.isSaving
+                  ? null
+                  : () => context
+                      .read<HomeBloc>()
+                      .add(const SavePendingRenames()),
+              saveCount: state.pendingRenames.length,
+            ),
+            body: switch (state.status) {
+              HomeStatus.initial => const _EmptyState(),
+              HomeStatus.loading =>
+                const Center(child: CircularProgressIndicator()),
+              HomeStatus.error => _ErrorState(message: state.error),
+              HomeStatus.ready => ResizableSplit(
+                  left: FolderTreeView(
+                    rootFolder: state.selectedFolder!,
+                    rootChildren: state.rootFolders,
+                    loadChildren: (path) =>
+                        context.read<HomeBloc>().loadSubfolders(path),
+                    selectedFolderPath: state.selectedFolder?.path,
+                    onFolderSelected: (folder) => context
+                        .read<HomeBloc>()
+                        .add(FolderSelected(folder)),
+                  ),
+                  right: AudioFilesView(
+                    folderName: state.selectedFolder?.name,
+                    status: state.audioStatus,
+                    files: state.audioFiles,
+                    loadCoverArt: (path) =>
+                        context.read<HomeBloc>().loadCoverArt(path),
+                    pendingRenames: state.pendingRenames,
+                    onSwap: (path) => context
+                        .read<HomeBloc>()
+                        .add(SwapRequested(path)),
+                    error: state.audioError,
+                    onRetry: () {
+                      final folder = state.selectedFolder;
+                      if (folder != null) {
+                        context
+                            .read<HomeBloc>()
+                            .add(FolderSelected(folder));
+                      }
+                    },
+                  ),
+                ),
+            },
+          );
+        },
+      ),
     );
   }
 }
