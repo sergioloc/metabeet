@@ -219,6 +219,8 @@ class _AudioFilesViewState extends State<AudioFilesView> {
           separatorBuilder: (context, index) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final file = files[index];
+            final displayName = nameWithoutExtension(file.path);
+            final hasSingleDash = displayName.split('-').length - 1 == 1;
             return ListTile(
               dense: true,
               leading: _TrackArtwork(
@@ -257,11 +259,22 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      nameWithoutExtension(file.path),
+                      displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (hasSingleDash)
+                    IconButton(
+                      onPressed: () {},
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      color: colorScheme.onSurfaceVariant,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 24,
+                      ),
+                    ),
                 ],
               ),
             );
