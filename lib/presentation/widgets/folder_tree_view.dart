@@ -80,7 +80,7 @@ class FolderTreeView extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        'Esta carpeta no contiene subcarpetas',
+                        'This folder has no subfolders',
                         textAlign: TextAlign.center,
                         style: textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,

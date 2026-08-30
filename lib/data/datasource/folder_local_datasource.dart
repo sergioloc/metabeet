@@ -16,7 +16,7 @@ class FolderLocalDataSourceImpl implements FolderLocalDataSource {
   @override
   Future<FolderModel?> pickFolder() async {
     final path = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Selecciona una carpeta',
+      dialogTitle: 'Select a folder',
     );
     if (path == null) return null;
     return FolderModel(name: nameFromPath(path), path: path);

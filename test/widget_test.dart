@@ -63,7 +63,7 @@ void main() {
     await tester.pumpWidget(MetabeetApp(bloc: bloc));
 
     expect(find.text('Metabeet'), findsOneWidget);
-    expect(find.text('Importar'), findsOneWidget);
+    expect(find.text('Import'), findsOneWidget);
   });
 
   testWidgets('al importar una carpeta muestra su árbol y sus canciones',
@@ -73,11 +73,11 @@ void main() {
     });
     await tester.pumpWidget(MetabeetApp(bloc: bloc));
 
-    await tester.tap(find.text('Importar'));
+    await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
 
     expect(find.text('Music'), findsWidgets);
-    expect(find.text('Canciones'), findsOneWidget);
+    expect(find.text('Songs'), findsOneWidget);
     expect(find.text('song'), findsOneWidget);
     expect(find.text('mp3'), findsOneWidget);
   });
@@ -88,7 +88,7 @@ void main() {
     });
     await tester.pumpWidget(MetabeetApp(bloc: bloc));
 
-    await tester.tap(find.text('Importar'));
+    await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Rock'));
@@ -107,7 +107,7 @@ void main() {
     });
     await tester.pumpWidget(MetabeetApp(bloc: bloc));
 
-    await tester.tap(find.text('Importar'));
+    await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.chevron_right), findsNothing);
@@ -124,7 +124,7 @@ void main() {
     });
     await tester.pumpWidget(MetabeetApp(bloc: bloc));
 
-    await tester.tap(find.text('Importar'));
+    await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.chevron_right), findsOneWidget);
@@ -139,7 +139,7 @@ void main() {
     );
     await tester.pumpWidget(MetabeetApp(bloc: bloc));
 
-    await tester.tap(find.text('Importar'));
+    await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.music_note), findsOneWidget);
@@ -156,7 +156,7 @@ void main() {
     );
     await tester.pumpWidget(MetabeetApp(bloc: bloc));
 
-    await tester.tap(find.text('Importar'));
+    await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
 
     expect(find.byType(Image), findsOneWidget);

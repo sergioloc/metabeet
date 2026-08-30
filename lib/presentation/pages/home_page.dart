@@ -80,7 +80,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Pulsa "Importar" para seleccionar una carpeta',
+            'Click "Import" to select a folder',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -108,7 +108,7 @@ class _ErrorState extends StatelessWidget {
             Icon(Icons.error_outline, size: 64, color: colorScheme.error),
             const SizedBox(height: 16),
             Text(
-              'No se pudo importar la carpeta',
+              'Could not import the folder',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (message != null) ...[
@@ -127,7 +127,7 @@ class _ErrorState extends StatelessWidget {
                   .read<HomeBloc>()
                   .add(const ImportFolderPressed()),
               icon: const Icon(Icons.refresh),
-              label: const Text('Intentar de nuevo'),
+              label: const Text('Try again'),
             ),
           ],
         ),

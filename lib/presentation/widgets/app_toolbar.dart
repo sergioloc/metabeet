@@ -41,7 +41,7 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
           child: FilledButton.icon(
             onPressed: onImportPressed,
             icon: const Icon(Icons.file_upload_outlined, size: 18),
-            label: const Text('Importar'),
+            label: const Text('Import'),
           ),
         ),
       ],

@@ -88,7 +88,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Canciones',
+                        'Songs',
                         style: textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -122,13 +122,13 @@ class _AudioFilesViewState extends State<AudioFilesView> {
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: 'Buscar canciones…',
+                  hintText: 'Search songs…',
                   prefixIcon: const Icon(Icons.search, size: 20),
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
                           icon: const Icon(Icons.clear, size: 18),
-                          tooltip: 'Limpiar búsqueda',
+                          tooltip: 'Clear search',
                           onPressed: _searchController.clear,
                         ),
                   isDense: true,
@@ -168,7 +168,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                 Icon(Icons.error_outline, size: 48, color: colorScheme.error),
                 const SizedBox(height: 12),
                 Text(
-                  'No se pudieron cargar los archivos de audio',
+                  'Could not load the audio files',
                   textAlign: TextAlign.center,
                   style: textTheme.titleSmall,
                 ),
@@ -186,7 +186,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                 FilledButton.icon(
                   onPressed: widget.onRetry,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Reintentar'),
+                  label: const Text('Retry'),
                 ),
               ],
             ),
@@ -196,7 +196,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
         if (widget.files.isEmpty) {
           return Center(
             child: Text(
-              'No hay archivos de audio en esta carpeta',
+              'No audio files in this folder',
               style: textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -206,7 +206,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
         if (files.isEmpty) {
           return Center(
             child: Text(
-              'No se encontraron resultados',
+              'No results found',
               style: textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -270,7 +270,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
   }
 
   String _fileCountLabel(int count) =>
-      count == 1 ? '1 archivo' : '$count archivos';
+      count == 1 ? '1 file' : '$count files';
 }
 
 /// Shows the track's embedded cover art, or a music icon as fallback.
