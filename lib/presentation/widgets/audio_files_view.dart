@@ -143,17 +143,24 @@ class AudioFilesView extends StatelessWidget {
                 Icons.audiotrack,
                 color: colorScheme.primary,
               ),
-              title: Text(
-                nameWithoutExtension(file.path),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Chip(
-                label: Text(
-                  extensionFromPath(file.path),
-                  style: textTheme.labelSmall,
-                ),
-                visualDensity: VisualDensity.compact,
+              title: Row(
+                children: [
+                  Chip(
+                    label: Text(
+                      extensionFromPath(file.path),
+                      style: textTheme.labelSmall,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      nameWithoutExtension(file.path),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             );
           },
