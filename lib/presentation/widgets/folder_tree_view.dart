@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../domain/entities/folder_entity.dart';
 
-/// Panel izquierdo: muestra la carpeta importada y su árbol de subcarpetas.
+/// Panel izquierdo: árbol de carpetas de la carpeta importada,
+/// con apariencia estilo "Project" de Android Studio.
 class FolderTreeView extends StatelessWidget {
   const FolderTreeView({
     super.key,
@@ -23,46 +24,54 @@ class FolderTreeView extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isRootSelected = selectedFolderPath == rootFolder.path;
 
     return Material(
       color: colorScheme.surfaceContainerLow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.drive_folder_upload_outlined,
-                  size: 28,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        rootFolder.name,
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        rootFolder.path,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+          InkWell(
+            onTap: () => onFolderSelected(rootFolder),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              color: isRootSelected
+                  ? colorScheme.primaryContainer.withValues(alpha: 0.35)
+                  : Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.folder_copy_outlined,
+                    size: 20,
+                    color: colorScheme.primary,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rootFolder.name,
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          rootFolder.path,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const Divider(height: 1),
@@ -85,11 +94,12 @@ class FolderTreeView extends StatelessWidget {
                     itemCount: rootChildren.length,
                     itemBuilder: (context, index) {
                       final folder = rootChildren[index];
-                      return FolderTreeNode(
+                      return _FolderTreeNode(
                         folder: folder,
+                        depth: 0,
                         loadChildren: loadChildren,
-                        onFolderSelected: onFolderSelected,
                         selectedFolderPath: selectedFolderPath,
+                        onFolderSelected: onFolderSelected,
                       );
                     },
                   ),
@@ -100,113 +110,175 @@ class FolderTreeView extends StatelessWidget {
   }
 }
 
-/// Nodo del árbol que carga sus subcarpetas de forma perezosa al expandirse.
+/// Nodo del árbol en estilo Android Studio.
 ///
-/// Al expandir una carpeta también la selecciona, mostrando sus archivos de
-/// audio en el panel derecho.
-class FolderTreeNode extends StatefulWidget {
-  const FolderTreeNode({
-    super.key,
+/// Las subcarpetas se cargan al construir el nodo: si la carpeta no tiene
+/// subcarpetas no se muestra la flecha de expansión. Un clic en la fila
+/// selecciona la carpeta para mostrar sus archivos de audio.
+class _FolderTreeNode extends StatefulWidget {
+  const _FolderTreeNode({
     required this.folder,
+    required this.depth,
     required this.loadChildren,
-    required this.onFolderSelected,
     required this.selectedFolderPath,
+    required this.onFolderSelected,
   });
 
   final FolderEntity folder;
+  final int depth;
   final Future<List<FolderEntity>> Function(String path) loadChildren;
-  final void Function(FolderEntity folder) onFolderSelected;
   final String? selectedFolderPath;
+  final void Function(FolderEntity folder) onFolderSelected;
 
   @override
-  State<FolderTreeNode> createState() => _FolderTreeNodeState();
+  State<_FolderTreeNode> createState() => _FolderTreeNodeState();
 }
 
-class _FolderTreeNodeState extends State<FolderTreeNode> {
+class _FolderTreeNodeState extends State<_FolderTreeNode> {
   List<FolderEntity>? _children;
-  bool _loaded = false;
-  bool _loading = false;
+  bool _expanded = false;
+  bool _hovered = false;
 
   bool get _isSelected => widget.selectedFolderPath == widget.folder.path;
+
+  bool get _hasSubfolders =>
+      _children != null && _children!.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChildren();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      color: _isSelected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.35)
-          : Colors.transparent,
-      child: ExpansionTile(
-        key: PageStorageKey(widget.folder.path),
-        leading: Icon(Icons.folder_outlined, color: colorScheme.primary),
-        title: Text(
-          widget.folder.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        onExpansionChanged: _onExpansionChanged,
-        children: _children == null
-            ? [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 40),
-                  child: _loading
-                      ? const LinearProgressIndicator(minHeight: 2)
-                      : const SizedBox(height: 2),
+    final Color rowColor;
+    if (_isSelected) {
+      rowColor = colorScheme.primaryContainer.withValues(alpha: 0.35);
+    } else if (_hovered) {
+      rowColor = colorScheme.surfaceContainerHighest.withValues(alpha: 0.6);
+    } else {
+      rowColor = Colors.transparent;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: widget.folder.path,
+          waitDuration: const Duration(milliseconds: 600),
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hovered = true),
+            onExit: (_) => setState(() => _hovered = false),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              color: rowColor,
+              child: InkWell(
+                onTap: () => widget.onFolderSelected(widget.folder),
+                child: SizedBox(
+                  height: 30,
+                  child: Row(
+                    children: [
+                      SizedBox(width: widget.depth * 16),
+                      SizedBox(
+                        width: 24,
+                        height: 30,
+                        child: Center(child: _buildArrow(colorScheme)),
+                      ),
+                      Icon(
+                        _hasSubfolders && _expanded
+                            ? Icons.folder_open
+                            : Icons.folder,
+                        size: 18,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.folder.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: _isSelected
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ),
                 ),
-              ]
-            : _children!.isEmpty
-                ? [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 40,
-                      ),
-                      child: Text(
-                        'Sin subcarpetas',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ),
-                  ]
-                : _children!
-                    .map(
-                      (folder) => FolderTreeNode(
-                        folder: folder,
-                        loadChildren: widget.loadChildren,
-                        onFolderSelected: widget.onFolderSelected,
-                        selectedFolderPath: widget.selectedFolderPath,
-                      ),
-                    )
-                    .toList(growable: false),
+              ),
+            ),
+          ),
+        ),
+        if (_expanded) ..._buildChildren(),
+      ],
+    );
+  }
+
+  Widget _buildArrow(ColorScheme colorScheme) {
+    if (_children == null) {
+      // Cargando las subcarpetas para saber si tiene flecha.
+      return SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+    if (!_hasSubfolders) {
+      return const SizedBox.shrink();
+    }
+    return InkResponse(
+      onTap: _toggleExpansion,
+      radius: 14,
+      child: AnimatedRotation(
+        turns: _expanded ? 0.25 : 0,
+        duration: const Duration(milliseconds: 150),
+        child: Icon(
+          Icons.chevron_right,
+          size: 20,
+          color: colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }
 
-  Future<void> _onExpansionChanged(bool expanded) async {
-    if (expanded) {
-      widget.onFolderSelected(widget.folder);
-    }
-    if (!expanded || _loaded) return;
+  List<Widget> _buildChildren() {
+    final children = _children ?? const [];
+    return children
+        .map(
+          (folder) => _FolderTreeNode(
+            folder: folder,
+            depth: widget.depth + 1,
+            loadChildren: widget.loadChildren,
+            selectedFolderPath: widget.selectedFolderPath,
+            onFolderSelected: widget.onFolderSelected,
+          ),
+        )
+        .toList(growable: false);
+  }
 
-    setState(() => _loading = true);
+  void _toggleExpansion() {
+    if (!_hasSubfolders) return;
+    setState(() => _expanded = !_expanded);
+  }
+
+  Future<void> _loadChildren() async {
     try {
       final children = await widget.loadChildren(widget.folder.path);
       if (!mounted) return;
-      setState(() {
-        _children = children;
-        _loaded = true;
-        _loading = false;
-      });
+      setState(() => _children = children);
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _children = const [];
-        _loaded = true;
-        _loading = false;
-      });
+      setState(() => _children = const []);
     }
   }
 }
