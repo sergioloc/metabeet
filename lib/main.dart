@@ -13,6 +13,7 @@ import 'domain/usecases/get_folder_subfolders.dart';
 import 'domain/usecases/import_folder.dart';
 import 'presentation/bloc/home_bloc.dart';
 import 'presentation/pages/home_page.dart';
+import 'util/app_colors.dart';
 
 void main() {
   final FolderRepository folderRepository = FolderRepositoryImpl(
@@ -43,12 +44,56 @@ class MetabeetApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Metabeet',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.purple),
-          useMaterial3: true,
-        ),
+        theme: _buildTheme(Brightness.light),
+        darkTheme: _buildTheme(Brightness.dark),
+        themeMode: ThemeMode.dark,
         home: const HomePage(),
       ),
     );
   }
+}
+
+/// Dark gray theme with a beet accent used only on accent roles.
+ThemeData _buildTheme(Brightness brightness) {
+  final isDark = brightness == Brightness.dark;
+  final scheme = ColorScheme.fromSeed(
+    seedColor: AppColors.accent,
+    brightness: brightness,
+  ).copyWith(
+    surfaceTint: Colors.transparent,
+    surface: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+    onSurface: isDark ? AppColors.darkOnSurface : AppColors.lightOnSurface,
+    onSurfaceVariant: isDark
+        ? AppColors.darkOnSurfaceVariant
+        : AppColors.lightOnSurfaceVariant,
+    surfaceContainerLowest: isDark
+        ? AppColors.darkSurfaceContainerLowest
+        : AppColors.lightSurfaceContainerLowest,
+    surfaceContainerLow: isDark
+        ? AppColors.darkSurfaceContainerLow
+        : AppColors.lightSurfaceContainerLow,
+    surfaceContainer: isDark
+        ? AppColors.darkSurfaceContainer
+        : AppColors.lightSurfaceContainer,
+    surfaceContainerHigh: isDark
+        ? AppColors.darkSurfaceContainerHigh
+        : AppColors.lightSurfaceContainerHigh,
+    surfaceContainerHighest: isDark
+        ? AppColors.darkSurfaceContainerHighest
+        : AppColors.lightSurfaceContainerHighest,
+    surfaceDim: isDark ? AppColors.darkSurfaceDim : AppColors.lightSurfaceDim,
+    surfaceBright: isDark
+        ? AppColors.darkSurfaceBright
+        : AppColors.lightSurfaceBright,
+    outline: isDark ? AppColors.darkOutline : AppColors.lightOutline,
+    outlineVariant: isDark
+        ? AppColors.darkOutlineVariant
+        : AppColors.lightOutlineVariant,
+  );
+  return ThemeData(
+    colorScheme: scheme,
+    useMaterial3: true,
+    scaffoldBackgroundColor:
+        isDark ? AppColors.darkSurface : AppColors.lightSurface,
+  );
 }

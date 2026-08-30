@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/enum/audio_format.dart';
 import '../../domain/entities/audio_file_entity.dart';
+import '../../util/app_colors.dart';
 import '../../util/path_utils.dart';
 import '../bloc/home_bloc.dart';
 
@@ -358,21 +359,21 @@ class _TrackArtworkState extends State<_TrackArtwork> {
 MaterialColor _extensionColor(AudioFormat format) {
   switch (format) {
     case AudioFormat.mp3:
-      return Colors.orange;
+      return AppColors.mp3;
     case AudioFormat.flac:
-      return Colors.blue;
+      return AppColors.flac;
     case AudioFormat.wav:
-      return Colors.cyan;
+      return AppColors.wav;
     case AudioFormat.ogg:
-      return Colors.deepPurple;
+      return AppColors.ogg;
     case AudioFormat.aac:
-      return Colors.pink;
+      return AppColors.aac;
     case AudioFormat.m4a:
-      return Colors.teal;
+      return AppColors.m4a;
     case AudioFormat.wma:
-      return Colors.indigo;
+      return AppColors.wma;
     case AudioFormat.aiff:
-      return Colors.brown;
+      return AppColors.aiff;
   }
 }
 
