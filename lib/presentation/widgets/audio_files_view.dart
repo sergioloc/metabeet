@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
+import '../../domain/enum/audio_format.dart';
 import '../../domain/entities/audio_file_entity.dart';
 import '../../util/path_utils.dart';
 import '../bloc/home_bloc.dart';
@@ -11,6 +14,7 @@ class AudioFilesView extends StatelessWidget {
     required this.folderName,
     required this.status,
     required this.files,
+    required this.loadCoverArt,
     this.error,
     this.onRetry,
   });
@@ -18,6 +22,7 @@ class AudioFilesView extends StatelessWidget {
   final String? folderName;
   final AudioStatus status;
   final List<AudioFileEntity> files;
+  final Future<Uint8List?> Function(String path) loadCoverArt;
   final String? error;
   final VoidCallback? onRetry;
 
@@ -131,26 +136,43 @@ class AudioFilesView extends StatelessWidget {
         }
         return ListView.separated(
           itemCount: files.length,
-          separatorBuilder: (context, index) => const Divider(
-            height: 1,
-            indent: 56,
-          ),
+          separatorBuilder: (context, index) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final file = files[index];
             return ListTile(
               dense: true,
-              leading: Icon(
-                Icons.audiotrack,
-                color: colorScheme.primary,
+              leading: _TrackArtwork(
+                path: file.path,
+                loadCoverArt: loadCoverArt,
               ),
               title: Row(
                 children: [
-                  Chip(
-                    label: Text(
-                      extensionFromPath(file.path),
-                      style: textTheme.labelSmall,
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 48,
+                    height: 20,
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _chipColor(file.format).withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _chipColor(file.format).withValues(
+                            alpha: 0.35,
+                          ),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        extensionFromPath(file.path),
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        style: textTheme.labelSmall?.copyWith(
+                          color: _extensionTextColor(context, file.format),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                    visualDensity: VisualDensity.compact,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -170,4 +192,123 @@ class AudioFilesView extends StatelessWidget {
 
   String _fileCountLabel(int count) =>
       count == 1 ? '1 archivo' : '$count archivos';
+}
+
+/// Muestra la carátula embebida de la pista si existe; si no la tiene,
+/// muestra el icono musical por defecto.
+class _TrackArtwork extends StatefulWidget {
+  const _TrackArtwork({required this.path, required this.loadCoverArt});
+
+  final String path;
+  final Future<Uint8List?> Function(String path) loadCoverArt;
+
+  @override
+  State<_TrackArtwork> createState() => _TrackArtworkState();
+}
+
+class _TrackArtworkState extends State<_TrackArtwork> {
+  static const double _size = 36;
+
+  Uint8List? _bytes;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    Uint8List? bytes;
+    try {
+      bytes = await widget.loadCoverArt(widget.path);
+    } catch (_) {
+      bytes = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _bytes = bytes;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final fallback = Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Icon(Icons.music_note, size: 20, color: colorScheme.onSurfaceVariant),
+    );
+
+    if (_loading) {
+      return const SizedBox(
+        width: _size,
+        height: _size,
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final bytes = _bytes;
+    if (bytes == null) return fallback;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Image.memory(
+        bytes,
+        width: _size,
+        height: _size,
+        fit: BoxFit.cover,
+        cacheWidth: 72,
+        cacheHeight: 72,
+        errorBuilder: (context, error, stackTrace) => fallback,
+      ),
+    );
+  }
+}
+
+MaterialColor _extensionColor(AudioFormat format) {
+  switch (format) {
+    case AudioFormat.mp3:
+      return Colors.orange;
+    case AudioFormat.flac:
+      return Colors.blue;
+    case AudioFormat.wav:
+      return Colors.cyan;
+    case AudioFormat.ogg:
+      return Colors.deepPurple;
+    case AudioFormat.aac:
+      return Colors.pink;
+    case AudioFormat.m4a:
+      return Colors.teal;
+    case AudioFormat.wma:
+      return Colors.indigo;
+    case AudioFormat.aiff:
+      return Colors.brown;
+  }
+}
+
+Color _chipColor(AudioFormat format) {
+  final hsl = HSLColor.fromColor(_extensionColor(format).shade600);
+  return hsl.withSaturation(hsl.saturation * 0.35).toColor();
+}
+
+Color _extensionTextColor(BuildContext context, AudioFormat format) {
+  final scheme = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return Color.lerp(
+    _chipColor(format),
+    scheme.onSurface,
+    isDark ? 0.25 : 0.45,
+  )!;
 }

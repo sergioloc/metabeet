@@ -8,6 +8,7 @@ import 'data/repositories/folder_repository_impl.dart';
 import 'domain/repositories/audio_file_repository.dart';
 import 'domain/repositories/folder_repository.dart';
 import 'domain/usecases/get_audio_files.dart';
+import 'domain/usecases/get_cover_art.dart';
 import 'domain/usecases/get_folder_subfolders.dart';
 import 'domain/usecases/import_folder.dart';
 import 'presentation/bloc/home_bloc.dart';
@@ -18,12 +19,13 @@ void main() {
     const FolderLocalDataSourceImpl(),
   );
   final AudioFileRepository audioFileRepository = AudioFileRepositoryImpl(
-    const AudioFileLocalDataSourceImpl(),
+    AudioFileLocalDataSourceImpl(),
   );
   final homeBloc = HomeBloc(
     importFolder: ImportFolderUseCase(folderRepository),
     getFolderSubfolders: GetFolderSubfoldersUseCase(folderRepository),
     getAudioFiles: GetAudioFilesUseCase(audioFileRepository),
+    getCoverArt: GetCoverArtUseCase(audioFileRepository),
   );
 
   runApp(MetabeetApp(bloc: homeBloc));

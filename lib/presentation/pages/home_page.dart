@@ -43,6 +43,8 @@ class HomePage extends StatelessWidget {
                   folderName: state.selectedFolder?.name,
                   status: state.audioStatus,
                   files: state.audioFiles,
+                  loadCoverArt: (path) =>
+                      context.read<HomeBloc>().loadCoverArt(path),
                   error: state.audioError,
                   onRetry: () {
                     final folder = state.selectedFolder;

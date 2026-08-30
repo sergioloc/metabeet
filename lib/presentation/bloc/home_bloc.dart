@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/audio_file_entity.dart';
 import '../../domain/entities/folder_entity.dart';
 import '../../domain/usecases/get_audio_files.dart';
+import '../../domain/usecases/get_cover_art.dart';
 import '../../domain/usecases/get_folder_subfolders.dart';
 import '../../domain/usecases/import_folder.dart';
 
@@ -87,6 +90,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     required this.importFolder,
     required this.getFolderSubfolders,
     required this.getAudioFiles,
+    required this.getCoverArt,
   }) : super(const HomeState()) {
     on<ImportFolderPressed>(_onImportFolderPressed);
     on<FolderSelected>(_onFolderSelected);
@@ -95,6 +99,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final ImportFolderUseCase importFolder;
   final GetFolderSubfoldersUseCase getFolderSubfolders;
   final GetAudioFilesUseCase getAudioFiles;
+  final GetCoverArtUseCase getCoverArt;
 
   Future<void> _onImportFolderPressed(
     ImportFolderPressed event,
@@ -169,4 +174,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   Future<List<FolderEntity>> loadSubfolders(String path) =>
       getFolderSubfolders(path);
+
+  Future<Uint8List?> loadCoverArt(String path) => getCoverArt(path);
 }

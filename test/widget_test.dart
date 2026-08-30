@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metabeet/domain/enum/audio_format.dart';
@@ -6,6 +9,7 @@ import 'package:metabeet/domain/entities/folder_entity.dart';
 import 'package:metabeet/domain/repositories/audio_file_repository.dart';
 import 'package:metabeet/domain/repositories/folder_repository.dart';
 import 'package:metabeet/domain/usecases/get_audio_files.dart';
+import 'package:metabeet/domain/usecases/get_cover_art.dart';
 import 'package:metabeet/domain/usecases/get_folder_subfolders.dart';
 import 'package:metabeet/domain/usecases/import_folder.dart';
 import 'package:metabeet/main.dart';
@@ -27,6 +31,10 @@ class _FakeFolderRepository implements FolderRepository {
 }
 
 class _FakeAudioFileRepository implements AudioFileRepository {
+  _FakeAudioFileRepository({this.coverBytes});
+
+  final Uint8List? coverBytes;
+
   @override
   Future<List<AudioFileEntity>> getAudioFiles(String path) async => const [
         AudioFileEntity(
@@ -35,7 +43,18 @@ class _FakeAudioFileRepository implements AudioFileRepository {
           format: AudioFormat.mp3,
         ),
       ];
+
+  @override
+  Future<Uint8List?> getCoverArt(String path) async {
+    final cover = coverBytes;
+    return cover == null ? null : Uint8List.fromList(cover);
+  }
 }
+
+/// PNG transparente de 1x1.
+final Uint8List _tinyPng = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+);
 
 void main() {
   testWidgets('muestra el nombre y el botón de importar', (tester) async {
@@ -111,14 +130,51 @@ void main() {
 
     expect(find.byIcon(Icons.chevron_right), findsOneWidget);
   });
+
+  testWidgets('sin carátula se muestra el icono musical', (tester) async {
+    final bloc = _buildBloc(
+      {
+        '/music': const [FolderEntity(name: 'Rock', path: '/music/rock')],
+      },
+      coverBytes: null,
+    );
+    await tester.pumpWidget(MetabeetApp(bloc: bloc));
+
+    await tester.tap(find.text('Importar'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.music_note), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+  });
+
+  testWidgets('con carátula se muestra la imagen en lugar del icono',
+      (tester) async {
+    final bloc = _buildBloc(
+      {
+        '/music': const [FolderEntity(name: 'Rock', path: '/music/rock')],
+      },
+      coverBytes: _tinyPng,
+    );
+    await tester.pumpWidget(MetabeetApp(bloc: bloc));
+
+    await tester.tap(find.text('Importar'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byIcon(Icons.audiotrack), findsNothing);
+  });
 }
 
-HomeBloc _buildBloc(Map<String, List<FolderEntity>> tree) {
+HomeBloc _buildBloc(
+  Map<String, List<FolderEntity>> tree, {
+  Uint8List? coverBytes,
+}) {
   final folderRepository = _FakeFolderRepository(tree);
-  final audioFileRepository = _FakeAudioFileRepository();
+  final audioFileRepository = _FakeAudioFileRepository(coverBytes: coverBytes);
   return HomeBloc(
     importFolder: ImportFolderUseCase(folderRepository),
     getFolderSubfolders: GetFolderSubfoldersUseCase(folderRepository),
     getAudioFiles: GetAudioFilesUseCase(audioFileRepository),
+    getCoverArt: GetCoverArtUseCase(audioFileRepository),
   );
 }
