@@ -37,13 +37,9 @@ class FolderLocalDataSourceImpl implements FolderLocalDataSource {
               ),
             );
           }
-        } catch (_) {
-          // Ignora entradas individuales que no se puedan inspeccionar.
-        }
+        } catch (_) {}
       }
-    } catch (_) {
-      // Ruta inaccesible: devuelve una lista vacía.
-    }
+    } catch (_) {}
     folders.sort(
       (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     );

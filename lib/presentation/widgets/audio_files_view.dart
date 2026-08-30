@@ -7,7 +7,7 @@ import '../../domain/entities/audio_file_entity.dart';
 import '../../util/path_utils.dart';
 import '../bloc/home_bloc.dart';
 
-/// Panel derecho: muestra los archivos de audio de la carpeta seleccionada.
+/// Right panel: shows the audio files of the selected folder, with search.
 class AudioFilesView extends StatefulWidget {
   const AudioFilesView({
     super.key,
@@ -273,8 +273,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
       count == 1 ? '1 archivo' : '$count archivos';
 }
 
-/// Muestra la carátula embebida de la pista si existe; si no la tiene,
-/// muestra el icono musical por defecto.
+/// Shows the track's embedded cover art, or a music icon as fallback.
 class _TrackArtwork extends StatefulWidget {
   const _TrackArtwork({required this.path, required this.loadCoverArt});
 

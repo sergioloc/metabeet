@@ -9,18 +9,14 @@ import '../../domain/enum/audio_format.dart';
 import '../../util/path_utils.dart';
 import '../model/audio_file_model.dart';
 
+/// Reads audio files and their cover art from disk.
 abstract class AudioFileLocalDataSource {
   Future<List<AudioFileModel>> getAudioFiles(String path);
 
   Future<Uint8List?> getCoverArt(String path);
 }
 
-/// Lee la carátula de forma eficiente para no ralentizar el scroll:
-///
-/// - La lectura se ejecuta en un isolate aparte para no bloquear la UI.
-/// - Limita el número de lecturas simultáneas.
-/// - Cachea los resultados en memoria (LRU) para no releer carátulas que ya
-///   se han mostrado.
+/// Reads cover art off the UI thread and caches recent results.
 class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   AudioFileLocalDataSourceImpl({int maxConcurrentReads = 4})
       : _maxConcurrentReads = maxConcurrentReads;
@@ -51,9 +47,7 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
           }
         }
       }
-    } catch (_) {
-      // Ruta inaccesible: devuelve una lista vacía.
-    }
+    } catch (_) {}
     files.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return files;
   }
@@ -62,7 +56,6 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   Future<Uint8List?> getCoverArt(String path) {
     final cached = _cache.remove(path);
     if (cached != null) {
-      // Reinsertar al final para mantener el orden LRU.
       _cache[path] = cached;
       return cached;
     }

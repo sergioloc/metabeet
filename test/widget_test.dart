@@ -18,7 +18,6 @@ import 'package:metabeet/presentation/bloc/home_bloc.dart';
 class _FakeFolderRepository implements FolderRepository {
   _FakeFolderRepository(this.tree);
 
-  /// Ruta -> subcarpetas directas.
   final Map<String, List<FolderEntity>> tree;
 
   @override

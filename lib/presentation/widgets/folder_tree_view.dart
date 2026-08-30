@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/entities/folder_entity.dart';
 
-/// Panel izquierdo: árbol de carpetas de la carpeta importada,
-/// con apariencia estilo "Project" de Android Studio.
+/// Left panel: folder tree of the imported folder, styled like an IDE.
 class FolderTreeView extends StatelessWidget {
   const FolderTreeView({
     super.key,
@@ -110,11 +109,8 @@ class FolderTreeView extends StatelessWidget {
   }
 }
 
-/// Nodo del árbol en estilo Android Studio.
-///
-/// Las subcarpetas se cargan al construir el nodo: si la carpeta no tiene
-/// subcarpetas no se muestra la flecha de expansión. Un clic en la fila
-/// selecciona la carpeta para mostrar sus archivos de audio.
+/// Tree node that loads its subfolders on build and selects the folder
+/// when clicked.
 class _FolderTreeNode extends StatefulWidget {
   const _FolderTreeNode({
     required this.folder,
@@ -223,7 +219,6 @@ class _FolderTreeNodeState extends State<_FolderTreeNode> {
 
   Widget _buildArrow(ColorScheme colorScheme) {
     if (_children == null) {
-      // Cargando las subcarpetas para saber si tiene flecha.
       return SizedBox(
         width: 14,
         height: 14,

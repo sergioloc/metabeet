@@ -2,10 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Divide la pantalla en dos paneles horizontales y redimensionables.
-///
-/// El panel izquierdo ocupa inicialmente [initialFraction] del ancho total y
-/// puede arrastrarse entre [minFraction] y [maxFraction].
+/// Two horizontally resizable panels; the left one starts at
+/// [initialFraction] and can be dragged within [minFraction]..[maxFraction].
 class ResizableSplit extends StatefulWidget {
   const ResizableSplit({
     super.key,
