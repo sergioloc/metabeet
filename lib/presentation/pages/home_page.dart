@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../bloc/home_bloc.dart';
 import '../widgets/app_toolbar.dart';
+import '../widgets/audio_files_view.dart';
 import '../widgets/folder_tree_view.dart';
+import '../widgets/resizable_split.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -26,11 +28,31 @@ class HomePage extends StatelessWidget {
             HomeStatus.loading =>
               const Center(child: CircularProgressIndicator()),
             HomeStatus.error => _ErrorState(message: state.error),
-            HomeStatus.ready => FolderTreeView(
-                rootFolder: state.selectedFolder!,
-                rootChildren: state.rootFolders,
-                loadChildren: (path) =>
-                    context.read<HomeBloc>().loadSubfolders(path),
+            HomeStatus.ready => ResizableSplit(
+                left: FolderTreeView(
+                  rootFolder: state.selectedFolder!,
+                  rootChildren: state.rootFolders,
+                  loadChildren: (path) =>
+                      context.read<HomeBloc>().loadSubfolders(path),
+                  selectedFolderPath: state.selectedFolder?.path,
+                  onFolderSelected: (folder) => context
+                      .read<HomeBloc>()
+                      .add(FolderSelected(folder)),
+                ),
+                right: AudioFilesView(
+                  folderName: state.selectedFolder?.name,
+                  status: state.audioStatus,
+                  files: state.audioFiles,
+                  error: state.audioError,
+                  onRetry: () {
+                    final folder = state.selectedFolder;
+                    if (folder != null) {
+                      context
+                          .read<HomeBloc>()
+                          .add(FolderSelected(folder));
+                    }
+                  },
+                ),
               ),
           },
         );

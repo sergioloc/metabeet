@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 
+import '../../util/path_utils.dart';
 import '../model/folder_model.dart';
 
 abstract class FolderLocalDataSource {
@@ -18,7 +19,7 @@ class FolderLocalDataSourceImpl implements FolderLocalDataSource {
       dialogTitle: 'Selecciona una carpeta',
     );
     if (path == null) return null;
-    return FolderModel(name: _folderNameFromPath(path), path: path);
+    return FolderModel(name: nameFromPath(path), path: path);
   }
 
   @override
@@ -31,7 +32,7 @@ class FolderLocalDataSourceImpl implements FolderLocalDataSource {
           if (entity is Directory) {
             folders.add(
               FolderModel(
-                name: _folderNameFromPath(entity.path),
+                name: nameFromPath(entity.path),
                 path: entity.path,
               ),
             );
@@ -47,13 +48,5 @@ class FolderLocalDataSourceImpl implements FolderLocalDataSource {
       (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     );
     return folders;
-  }
-
-  String _folderNameFromPath(String path) {
-    final segments = path
-        .split(RegExp(r'[\\/]'))
-        .where((segment) => segment.isNotEmpty)
-        .toList();
-    return segments.isEmpty ? path : segments.last;
   }
 }
