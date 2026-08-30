@@ -8,7 +8,7 @@ import '../../util/path_utils.dart';
 import '../bloc/home_bloc.dart';
 
 /// Panel derecho: muestra los archivos de audio de la carpeta seleccionada.
-class AudioFilesView extends StatelessWidget {
+class AudioFilesView extends StatefulWidget {
   const AudioFilesView({
     super.key,
     required this.folderName,
@@ -27,9 +27,50 @@ class AudioFilesView extends StatelessWidget {
   final VoidCallback? onRetry;
 
   @override
+  State<AudioFilesView> createState() => _AudioFilesViewState();
+}
+
+class _AudioFilesViewState extends State<AudioFilesView> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text);
+    });
+  }
+
+  @override
+  void didUpdateWidget(AudioFilesView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.folderName != widget.folderName) {
+      _searchController.clear();
+      _query = '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<AudioFileEntity> get _displayFiles {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return widget.files;
+    return widget.files.where((file) {
+      return nameWithoutExtension(file.path).toLowerCase().contains(q) ||
+          extensionFromPath(file.path).toLowerCase().contains(q);
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final displayFiles = _displayFiles;
 
     return Material(
       color: colorScheme.surfaceContainerLowest,
@@ -53,7 +94,7 @@ class AudioFilesView extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        folderName ?? '',
+                        widget.folderName ?? '',
                         style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -63,10 +104,10 @@ class AudioFilesView extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (status == AudioStatus.ready) ...[
+                if (widget.status == AudioStatus.ready) ...[
                   const SizedBox(width: 8),
                   Text(
-                    _fileCountLabel(files.length),
+                    _fileCountLabel(displayFiles.length),
                     style: textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -75,18 +116,46 @@ class AudioFilesView extends StatelessWidget {
               ],
             ),
           ),
+          if (widget.status == AudioStatus.ready)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Buscar canciones…',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          tooltip: 'Limpiar búsqueda',
+                          onPressed: _searchController.clear,
+                        ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.6,
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
           const Divider(height: 1),
-          Expanded(child: _buildContent(context)),
+          Expanded(child: _buildContent(context, displayFiles)),
         ],
       ),
     );
   }
 
-  Widget _buildContent(BuildContext context) {
+  Widget _buildContent(BuildContext context, List<AudioFileEntity> files) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    switch (status) {
+    switch (widget.status) {
       case AudioStatus.loading || AudioStatus.idle:
         return const Center(child: CircularProgressIndicator());
       case AudioStatus.error:
@@ -103,10 +172,10 @@ class AudioFilesView extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: textTheme.titleSmall,
                 ),
-                if (error != null) ...[
+                if (widget.error != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    error!,
+                    widget.error!,
                     textAlign: TextAlign.center,
                     style: textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
@@ -115,7 +184,7 @@ class AudioFilesView extends StatelessWidget {
                 ],
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: onRetry,
+                  onPressed: widget.onRetry,
                   icon: const Icon(Icons.refresh),
                   label: const Text('Reintentar'),
                 ),
@@ -124,10 +193,20 @@ class AudioFilesView extends StatelessWidget {
           ),
         );
       case AudioStatus.ready:
-        if (files.isEmpty) {
+        if (widget.files.isEmpty) {
           return Center(
             child: Text(
               'No hay archivos de audio en esta carpeta',
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          );
+        }
+        if (files.isEmpty) {
+          return Center(
+            child: Text(
+              'No se encontraron resultados',
               style: textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -143,7 +222,7 @@ class AudioFilesView extends StatelessWidget {
               dense: true,
               leading: _TrackArtwork(
                 path: file.path,
-                loadCoverArt: loadCoverArt,
+                loadCoverArt: widget.loadCoverArt,
               ),
               title: Row(
                 children: [
