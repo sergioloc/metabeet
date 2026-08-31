@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/enum/audio_format.dart';
 import '../../domain/entities/audio_file_entity.dart';
+import '../../domain/entities/audio_metadata_entity.dart';
 import '../../util/app_colors.dart';
 import '../../util/path_utils.dart';
 import '../bloc/home_bloc.dart';
@@ -16,6 +17,7 @@ class AudioFilesView extends StatefulWidget {
     required this.status,
     required this.files,
     required this.loadCoverArt,
+    required this.loadMetadata,
     required this.pendingRenames,
     required this.onSwap,
     this.onFileSelected,
@@ -27,6 +29,7 @@ class AudioFilesView extends StatefulWidget {
   final AudioStatus status;
   final List<AudioFileEntity> files;
   final Future<Uint8List?> Function(String path) loadCoverArt;
+  final Future<AudioMetadataEntity?> Function(String path) loadMetadata;
   final Map<String, String> pendingRenames;
   final void Function(String path) onSwap;
   final void Function(String path)? onFileSelected;
@@ -268,6 +271,11 @@ itemBuilder: (context, index) {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  _SyncBadge(
+                    filePath: file.path,
+                    loadMetadata: widget.loadMetadata,
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       displayName,
@@ -387,6 +395,112 @@ class _TrackArtworkState extends State<_TrackArtwork> {
       ),
     );
   }
+}
+
+/// Shows whether the file's metadata title and artist match the
+/// "Title - Artist" file name. Loads metadata lazily.
+class _SyncBadge extends StatefulWidget {
+  const _SyncBadge({
+    required this.filePath,
+    required this.loadMetadata,
+  });
+
+  final String filePath;
+  final Future<AudioMetadataEntity?> Function(String path) loadMetadata;
+
+  @override
+  State<_SyncBadge> createState() => _SyncBadgeState();
+}
+
+enum _SyncState { loading, synced, mismatch, noPattern }
+
+class _SyncBadgeState extends State<_SyncBadge> {
+  _SyncState _state = _SyncState.loading;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    AudioMetadataEntity? metadata;
+    try {
+      metadata = await widget.loadMetadata(widget.filePath);
+    } catch (_) {
+      metadata = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _state = _computeSync(widget.filePath, metadata);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    switch (_state) {
+      case _SyncState.loading:
+        return const SizedBox(
+          width: 16,
+          height: 16,
+          child: Center(
+            child: SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      case _SyncState.synced:
+        return Tooltip(
+          message: 'Title and artist match the file name',
+          child: Icon(
+            Icons.check_circle,
+            size: 16,
+            color: Colors.green.shade600,
+          ),
+        );
+      case _SyncState.mismatch:
+        return Tooltip(
+          message: 'Title or artist does not match the file name',
+          child: Icon(
+            Icons.error_outline,
+            size: 16,
+            color: colorScheme.error,
+          ),
+        );
+      case _SyncState.noPattern:
+        return Tooltip(
+          message: 'File name does not follow "Title - Artist"',
+          child: Icon(
+            Icons.help_outline,
+            size: 16,
+            color: colorScheme.outline,
+          ),
+        );
+    }
+  }
+}
+
+_SyncState _computeSync(
+  String filePath,
+  AudioMetadataEntity? metadata,
+) {
+  final parts = splitTitleArtist(filePath);
+  if (parts == null || metadata == null) {
+    return _SyncState.noPattern;
+  }
+  final title = metadata.title?.trim().toLowerCase();
+  final artist = metadata.artist?.trim().toLowerCase();
+  if (title == null || artist == null) {
+    return _SyncState.mismatch;
+  }
+  if (title == parts.title.toLowerCase() &&
+      artist == parts.artist.toLowerCase()) {
+    return _SyncState.synced;
+  }
+  return _SyncState.mismatch;
 }
 
 MaterialColor _extensionColor(AudioFormat format) {

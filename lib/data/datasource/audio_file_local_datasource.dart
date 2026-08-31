@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
@@ -116,6 +117,9 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     return Isolate.run(() {
       try {
         final metadata = readMetadata(File(path), getImage: true);
+        final albumArtist = _resolveAlbumArtist(path, format);
+        final artist =
+            _hasAlbumArtist(format) ? albumArtist : metadata.artist;
         final duration = metadata.duration;
         final pictures = metadata.pictures;
         return AudioMetadataEntity(
@@ -123,7 +127,7 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
           name: nameFromPath(path),
           format: format,
           title: metadata.title,
-          artist: metadata.artist,
+          artist: artist,
           album: metadata.album,
           genre: metadata.genres.isEmpty ? null : metadata.genres.first,
           year: metadata.year?.year,
@@ -189,3 +193,93 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     }
   }
 }
+
+/// Resolves the album interpreter (album artist) for a file.
+///
+/// The generic `readMetadata` already prefers the album artist for MP3 via
+/// TPE2, but this helper reads the format-specific tags explicitly to keep the
+/// behaviour consistent across formats. For FLAC/OGG, `readMetadata` merges
+/// `ARTIST` and `ALBUMARTIST` into a single list so the album artist is not
+/// reliably exposed, therefore the raw Vorbis comments are read to prefer
+/// `ALBUMARTIST` over `ARTIST`. Returns null when the format has no dedicated
+/// album-artist tag.
+String? _resolveAlbumArtist(String path, AudioFormat format) {
+  switch (format) {
+    case AudioFormat.mp3:
+      try {
+        final tag = readAllMetadata(File(path));
+        if (tag is Mp3Metadata) {
+          final artist = tag.bandOrOrchestra;
+          final trimmed = artist?.trim();
+          return trimmed == null || trimmed.isEmpty ? null : trimmed;
+        }
+      } catch (_) {}
+      return null;
+    case AudioFormat.flac:
+    case AudioFormat.ogg:
+      return _vorbisAlbumArtist(path);
+    default:
+      return null;
+  }
+}
+
+/// Whether [format] has a dedicated album-artist tag distinct from the track
+/// artist. For these formats only the album artist is reported.
+bool _hasAlbumArtist(AudioFormat format) =>
+    format == AudioFormat.mp3 ||
+    format == AudioFormat.flac ||
+    format == AudioFormat.ogg;
+
+String? _decodeUtf8Bytes(List<int> bytes) {
+  try {
+    final decoded = utf8.decode(bytes, allowMalformed: true);
+    return decoded == '' ? null : decoded;
+  } catch (_) {
+    return null;
+  }
+}
+
+int _readUint32LE(List<int> bytes, int offset) {
+  if (offset + 4 > bytes.length) return -1;
+  return bytes[offset] |
+      (bytes[offset + 1] << 8) |
+      (bytes[offset + 2] << 16) |
+      (bytes[offset + 3] << 24);
+}
+
+/// Reads the value of the first Vorbis comment whose key matches [targets],
+/// searching a bounded leading region of the file.
+String? _vorbisCommentValue(String path, List<String> targets) {
+  try {
+    final file = File(path);
+    // Vorbis comments live near the start of FLAC/OGG files. A generous
+    // bounded read covers them without loading the whole (possibly large)
+    // audio file.
+    final length = file.lengthSync();
+    final readLength = length < 1 << 18 ? length : 1 << 18;
+    final raf = file.openSync();
+    final bytes = raf.readSync(readLength);
+    raf.closeSync();
+    final lower = utf8.decode(bytes, allowMalformed: true).toLowerCase();
+    for (final target in targets) {
+      final keyIndex = lower.indexOf(target);
+      if (keyIndex == -1) continue;
+      // Vorbis comments store each entry as a 4-byte little-endian length
+      // followed by the whole "KEY=value" bytes. Recover the value length by
+      // subtracting the key (including the '=') from the entry length.
+      final lengthOffset = keyIndex - 4;
+      final entryLength = _readUint32LE(bytes, lengthOffset);
+      final valueLength = entryLength - target.length;
+      if (entryLength <= 0 || valueLength <= 0) continue;
+      final valueOffset = keyIndex + target.length;
+      final valueBytes =
+          bytes.sublist(valueOffset, valueOffset + valueLength);
+      final value = _decodeUtf8Bytes(valueBytes);
+      if (value != null && value.trim().isNotEmpty) return value.trim();
+    }
+  } catch (_) {}
+  return null;
+}
+
+String? _vorbisAlbumArtist(String path) =>
+    _vorbisCommentValue(path, ['albumartist=', 'album_artist=', 'album artist=']);

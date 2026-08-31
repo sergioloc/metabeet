@@ -115,27 +115,42 @@ class SongDetailPanel extends StatelessWidget {
   }
 
   List<_DetailRow> _fileRows(AudioMetadataEntity meta) => [
-        if (meta.name.isNotEmpty)
-          _DetailRow(label: 'File name', value: meta.name),
+        _DetailRow(label: 'File name', value: meta.name),
         _DetailRow(label: 'Format', value: meta.format.name.toUpperCase()),
-        if (meta.duration != null)
-          _DetailRow(label: 'Duration', value: _formatDuration(meta.duration!)),
-        if (meta.bitrate != null)
-          _DetailRow(label: 'Bitrate', value: '${meta.bitrate} kbps'),
-        if (meta.sampleRate != null)
-          _DetailRow(label: 'Sample rate', value: '${meta.sampleRate} Hz'),
+        _DetailRow(
+          label: 'Duration',
+          value: meta.duration == null
+              ? _emptyValue
+              : _formatDuration(meta.duration!),
+        ),
+        _DetailRow(
+          label: 'Bitrate',
+          value: meta.bitrate == null ? _emptyValue : '${meta.bitrate} kbps',
+        ),
+        _DetailRow(
+          label: 'Sample rate',
+          value: meta.sampleRate == null
+              ? _emptyValue
+              : '${meta.sampleRate} Hz',
+        ),
       ];
 
-  List<_DetailRow> _metadataRows(AudioMetadataEntity meta) {
-    final rows = <_DetailRow>[];
-    if (meta.title != null) rows.add(_DetailRow(label: 'Title', value: meta.title!));
-    if (meta.artist != null) rows.add(_DetailRow(label: 'Artist', value: meta.artist!));
-    if (meta.album != null) rows.add(_DetailRow(label: 'Album', value: meta.album!));
-    if (meta.genre != null) rows.add(_DetailRow(label: 'Genre', value: meta.genre!));
-    if (meta.year != null) rows.add(_DetailRow(label: 'Year', value: '${meta.year}'));
-    if (meta.track != null) rows.add(_DetailRow(label: 'Track', value: '${meta.track}'));
-    return rows;
-  }
+  static const String _emptyValue = '—';
+
+  List<_DetailRow> _metadataRows(AudioMetadataEntity meta) => [
+        _DetailRow(label: 'Title', value: meta.title ?? _emptyValue),
+        _DetailRow(label: 'Artist', value: meta.artist ?? _emptyValue),
+        _DetailRow(label: 'Album', value: meta.album ?? _emptyValue),
+        _DetailRow(label: 'Genre', value: meta.genre ?? _emptyValue),
+        _DetailRow(
+          label: 'Year',
+          value: meta.year == null ? _emptyValue : '${meta.year}',
+        ),
+        _DetailRow(
+          label: 'Track',
+          value: meta.track == null ? _emptyValue : '${meta.track}',
+        ),
+      ];
 
   String _formatDuration(Duration duration) {
     final minutes = duration.inMinutes;

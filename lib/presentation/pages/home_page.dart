@@ -72,6 +72,7 @@ class HomePage extends StatelessWidget {
       status: state.audioStatus,
       files: state.audioFiles,
       loadCoverArt: (path) => context.read<HomeBloc>().loadCoverArt(path),
+      loadMetadata: (path) => context.read<HomeBloc>().loadMetadata(path),
       pendingRenames: state.pendingRenames,
       onSwap: (path) => context.read<HomeBloc>().add(SwapRequested(path)),
       onFileSelected: (path) =>

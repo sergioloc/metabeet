@@ -34,18 +34,20 @@ class _FakeFolderRepository implements FolderRepository {
 }
 
 class _FakeAudioFileRepository implements AudioFileRepository {
-  _FakeAudioFileRepository({this.coverBytes});
+  _FakeAudioFileRepository({this.coverBytes, this.metadata, this.file = _file});
 
   final Uint8List? coverBytes;
+  final AudioMetadataEntity? metadata;
+  final AudioFileEntity file;
+
+  static const _file = AudioFileEntity(
+    name: 'song.mp3',
+    path: '/music/rock/song.mp3',
+    format: AudioFormat.mp3,
+  );
 
   @override
-  Future<List<AudioFileEntity>> getAudioFiles(String path) async => const [
-        AudioFileEntity(
-          name: 'song.mp3',
-          path: '/music/rock/song.mp3',
-          format: AudioFormat.mp3,
-        ),
-      ];
+  Future<List<AudioFileEntity>> getAudioFiles(String path) async => [file];
 
   @override
   Future<Uint8List?> getCoverArt(String path) async {
@@ -54,12 +56,14 @@ class _FakeAudioFileRepository implements AudioFileRepository {
   }
 
   @override
-  Future<AudioMetadataEntity?> getMetadata(String path) async =>
-      const AudioMetadataEntity(
-        path: '/music/rock/song.mp3',
-        name: 'song.mp3',
-        format: AudioFormat.mp3,
-      );
+  Future<AudioMetadataEntity?> getMetadata(String path) async {
+    final meta = metadata;
+    return meta ?? const AudioMetadataEntity(
+          path: '/music/rock/song.mp3',
+          name: 'song.mp3',
+          format: AudioFormat.mp3,
+        );
+  }
 
   @override
   Future<void> renameFiles(List<FileRenameRequest> requests) async {}
@@ -218,14 +222,79 @@ void main() {
 
     expect(find.text('Details'), findsNothing);
   });
+
+  testWidgets(
+      'icono de sincronización verde si título y artista coinciden con el nombre',
+      (tester) async {
+    const file = AudioFileEntity(
+      name: 'Song - Artist.mp3',
+      path: '/music/rock/Song - Artist.mp3',
+      format: AudioFormat.mp3,
+    );
+    const metadata = AudioMetadataEntity(
+      path: '/music/rock/Song - Artist.mp3',
+      name: 'Song - Artist.mp3',
+      format: AudioFormat.mp3,
+      title: 'Song',
+      artist: 'Artist',
+    );
+    final bloc = _buildBloc(
+      {
+        '/music': const [FolderEntity(name: 'Rock', path: '/music/rock')],
+      },
+      metadata: metadata,
+      file: file,
+    );
+    await tester.pumpWidget(MetabeetApp(bloc: bloc));
+
+    await tester.tap(find.text('Import'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+  });
+
+  testWidgets('icono de error si título o artista no coinciden',
+      (tester) async {
+    const file = AudioFileEntity(
+      name: 'Song - Artist.mp3',
+      path: '/music/rock/Song - Artist.mp3',
+      format: AudioFormat.mp3,
+    );
+    const metadata = AudioMetadataEntity(
+      path: '/music/rock/Song - Artist.mp3',
+      name: 'Song - Artist.mp3',
+      format: AudioFormat.mp3,
+      title: 'Other',
+      artist: 'Artist',
+    );
+    final bloc = _buildBloc(
+      {
+        '/music': const [FolderEntity(name: 'Rock', path: '/music/rock')],
+      },
+      metadata: metadata,
+      file: file,
+    );
+    await tester.pumpWidget(MetabeetApp(bloc: bloc));
+
+    await tester.tap(find.text('Import'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+  });
 }
 
 HomeBloc _buildBloc(
   Map<String, List<FolderEntity>> tree, {
   Uint8List? coverBytes,
+  AudioMetadataEntity? metadata,
+  AudioFileEntity? file,
 }) {
   final folderRepository = _FakeFolderRepository(tree);
-  final audioFileRepository = _FakeAudioFileRepository(coverBytes: coverBytes);
+  final audioFileRepository = _FakeAudioFileRepository(
+    coverBytes: coverBytes,
+    metadata: metadata,
+    file: file ?? _FakeAudioFileRepository._file,
+  );
   return HomeBloc(
     importFolder: ImportFolderUseCase(folderRepository),
     getFolderSubfolders: GetFolderSubfoldersUseCase(folderRepository),

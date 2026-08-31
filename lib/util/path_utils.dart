@@ -18,6 +18,20 @@ String extensionFromPath(String path) {
   return index <= 0 ? '' : name.substring(index + 1);
 }
 
+/// Splits a "Title - Artist" file name into its two parts (title first).
+/// Returns null when the name does not contain exactly one hyphen.
+({String title, String artist})? splitTitleArtist(String filePath) {
+  final name = nameWithoutExtension(filePath);
+  final separator = name.indexOf(' - ');
+  if (separator == -1) return null;
+  final title = name.substring(0, separator).trim();
+  final artist = name.substring(separator + 3).trim();
+  if (title.isEmpty || artist.isEmpty || artist.contains(' - ')) {
+    return null;
+  }
+  return (title: title, artist: artist);
+}
+
 /// Swaps the two parts of a file name around its single hyphen,
 /// returning the new full path. Returns null when the name does not
 /// contain exactly one hyphen.
