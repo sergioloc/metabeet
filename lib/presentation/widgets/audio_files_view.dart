@@ -330,7 +330,7 @@ class _TrackArtworkState extends State<_TrackArtwork> {
   static const double _size = 36;
 
   Uint8List? _bytes;
-  bool _loading = true;
+  bool _loaded = false;
 
   @override
   void initState() {
@@ -348,52 +348,46 @@ class _TrackArtworkState extends State<_TrackArtwork> {
     if (!mounted) return;
     setState(() {
       _bytes = bytes;
-      _loading = false;
+      _loaded = true;
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _placeholder(BuildContext context, {bool showNote = false}) {
     final colorScheme = Theme.of(context).colorScheme;
-    final fallback = Container(
+    return Container(
       width: _size,
       height: _size,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Icon(Icons.music_note, size: 20, color: colorScheme.onSurfaceVariant),
+      child: showNote
+          ? Icon(Icons.music_note, size: 20, color: colorScheme.onSurfaceVariant)
+          : null,
     );
+  }
 
-    if (_loading) {
-      return const SizedBox(
-        width: _size,
-        height: _size,
-        child: Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+  @override
+  Widget build(BuildContext context) {
+    final bytes = _bytes;
+    if (bytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Image.memory(
+          bytes,
+          width: _size,
+          height: _size,
+          fit: BoxFit.cover,
+          cacheWidth: 72,
+          cacheHeight: 72,
+          errorBuilder: (context, error, stackTrace) =>
+              _placeholder(context, showNote: true),
         ),
       );
     }
-
-    final bytes = _bytes;
-    if (bytes == null) return fallback;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: Image.memory(
-        bytes,
-        width: _size,
-        height: _size,
-        fit: BoxFit.cover,
-        cacheWidth: 72,
-        cacheHeight: 72,
-        errorBuilder: (context, error, stackTrace) => fallback,
-      ),
-    );
+    // While loading: plain gray box. Once confirmed there is no cover art,
+    // show the music note.
+    return _placeholder(context, showNote: _loaded);
   }
 }
 
@@ -412,10 +406,10 @@ class _SyncBadge extends StatefulWidget {
   State<_SyncBadge> createState() => _SyncBadgeState();
 }
 
-enum _SyncState { loading, synced, mismatch, noPattern }
+enum _SyncState { pending, synced, mismatch, noPattern }
 
 class _SyncBadgeState extends State<_SyncBadge> {
-  _SyncState _state = _SyncState.loading;
+  _SyncState _state = _SyncState.pending;
 
   @override
   void initState() {
@@ -440,17 +434,11 @@ class _SyncBadgeState extends State<_SyncBadge> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     switch (_state) {
-      case _SyncState.loading:
-        return const SizedBox(
-          width: 16,
-          height: 16,
-          child: Center(
-            child: SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
+      case _SyncState.pending:
+        return Icon(
+          Icons.circle,
+          size: 16,
+          color: colorScheme.outlineVariant,
         );
       case _SyncState.synced:
         return Tooltip(
