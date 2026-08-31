@@ -10,6 +10,7 @@ import 'domain/repositories/folder_repository.dart';
 import 'domain/usecases/get_audio_files.dart';
 import 'domain/usecases/get_cover_art.dart';
 import 'domain/usecases/get_folder_subfolders.dart';
+import 'domain/usecases/get_metadata.dart';
 import 'domain/usecases/import_folder.dart';
 import 'domain/usecases/rename_files.dart';
 import 'presentation/bloc/home_bloc.dart';
@@ -29,6 +30,7 @@ void main() {
     getAudioFiles: GetAudioFilesUseCase(audioFileRepository),
     getCoverArt: GetCoverArtUseCase(audioFileRepository),
     renameFiles: RenameFilesUseCase(audioFileRepository),
+    getMetadata: GetMetadataUseCase(audioFileRepository),
   );
 
   runApp(MetabeetApp(bloc: homeBloc));

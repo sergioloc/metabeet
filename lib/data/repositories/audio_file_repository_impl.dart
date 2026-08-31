@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../../domain/entities/audio_file_entity.dart';
+import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
 import '../../domain/repositories/audio_file_repository.dart';
 import '../datasource/audio_file_local_datasource.dart';
@@ -19,6 +20,10 @@ class AudioFileRepositoryImpl implements AudioFileRepository {
   @override
   Future<Uint8List?> getCoverArt(String path) =>
       localDataSource.getCoverArt(path);
+
+  @override
+  Future<AudioMetadataEntity?> getMetadata(String path) =>
+      localDataSource.getMetadata(path);
 
   @override
   Future<void> renameFiles(List<FileRenameRequest> requests) =>

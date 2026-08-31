@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 
+import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
 import '../../domain/enum/audio_format.dart';
 import '../../util/path_utils.dart';
@@ -15,6 +16,8 @@ abstract class AudioFileLocalDataSource {
   Future<List<AudioFileModel>> getAudioFiles(String path);
 
   Future<Uint8List?> getCoverArt(String path);
+
+  Future<AudioMetadataEntity?> getMetadata(String path);
 
   Future<void> renameFiles(List<FileRenameRequest> requests);
 }
@@ -100,6 +103,38 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
         final metadata = readMetadata(File(path), getImage: true);
         final pictures = metadata.pictures;
         return pictures.isEmpty ? null : pictures.first.bytes;
+      } catch (_) {
+        return null;
+      }
+    });
+  }
+
+  @override
+  Future<AudioMetadataEntity?> getMetadata(String path) async {
+    final format = AudioFormat.fromPath(path);
+    if (format == null) return null;
+    return Isolate.run(() {
+      try {
+        final metadata = readMetadata(File(path), getImage: true);
+        final duration = metadata.duration;
+        final pictures = metadata.pictures;
+        return AudioMetadataEntity(
+          path: path,
+          name: nameFromPath(path),
+          format: format,
+          title: metadata.title,
+          artist: metadata.artist,
+          album: metadata.album,
+          genre: metadata.genres.isEmpty ? null : metadata.genres.first,
+          year: metadata.year?.year,
+          track: metadata.trackNumber,
+          duration: duration != null && duration > Duration.zero
+              ? duration
+              : null,
+          bitrate: metadata.bitrate,
+          sampleRate: metadata.sampleRate,
+          coverArt: pictures.isEmpty ? null : pictures.first.bytes,
+        );
       } catch (_) {
         return null;
       }

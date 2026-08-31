@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metabeet/domain/enum/audio_format.dart';
 import 'package:metabeet/domain/entities/audio_file_entity.dart';
+import 'package:metabeet/domain/entities/audio_metadata_entity.dart';
 import 'package:metabeet/domain/entities/file_rename_request.dart';
 import 'package:metabeet/domain/entities/folder_entity.dart';
 import 'package:metabeet/domain/repositories/audio_file_repository.dart';
@@ -12,6 +13,7 @@ import 'package:metabeet/domain/repositories/folder_repository.dart';
 import 'package:metabeet/domain/usecases/get_audio_files.dart';
 import 'package:metabeet/domain/usecases/get_cover_art.dart';
 import 'package:metabeet/domain/usecases/get_folder_subfolders.dart';
+import 'package:metabeet/domain/usecases/get_metadata.dart';
 import 'package:metabeet/domain/usecases/import_folder.dart';
 import 'package:metabeet/domain/usecases/rename_files.dart';
 import 'package:metabeet/main.dart';
@@ -50,6 +52,14 @@ class _FakeAudioFileRepository implements AudioFileRepository {
     final cover = coverBytes;
     return cover == null ? null : Uint8List.fromList(cover);
   }
+
+  @override
+  Future<AudioMetadataEntity?> getMetadata(String path) async =>
+      const AudioMetadataEntity(
+        path: '/music/rock/song.mp3',
+        name: 'song.mp3',
+        format: AudioFormat.mp3,
+      );
 
   @override
   Future<void> renameFiles(List<FileRenameRequest> requests) async {}
@@ -167,6 +177,47 @@ void main() {
     expect(find.byType(Image), findsOneWidget);
     expect(find.byIcon(Icons.audiotrack), findsNothing);
   });
+
+  testWidgets('al hacer clic en una canción se abre el panel de detalles',
+      (tester) async {
+    final bloc = _buildBloc({
+      '/music': const [FolderEntity(name: 'Rock', path: '/music/rock')],
+    });
+    await tester.pumpWidget(MetabeetApp(bloc: bloc));
+
+    await tester.tap(find.text('Import'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Details'), findsNothing);
+
+    await tester.tap(find.text('song'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('File name'), findsOneWidget);
+    expect(find.text('song.mp3'), findsOneWidget);
+  });
+
+  testWidgets('el botón de cerrar oculta el panel de detalles',
+      (tester) async {
+    final bloc = _buildBloc({
+      '/music': const [FolderEntity(name: 'Rock', path: '/music/rock')],
+    });
+    await tester.pumpWidget(MetabeetApp(bloc: bloc));
+
+    await tester.tap(find.text('Import'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('song'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Details'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Details'), findsNothing);
+  });
 }
 
 HomeBloc _buildBloc(
@@ -181,5 +232,6 @@ HomeBloc _buildBloc(
     getAudioFiles: GetAudioFilesUseCase(audioFileRepository),
     getCoverArt: GetCoverArtUseCase(audioFileRepository),
     renameFiles: RenameFilesUseCase(audioFileRepository),
+    getMetadata: GetMetadataUseCase(audioFileRepository),
   );
 }

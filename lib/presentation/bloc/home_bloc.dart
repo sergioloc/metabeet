@@ -4,11 +4,13 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/audio_file_entity.dart';
+import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
 import '../../domain/entities/folder_entity.dart';
 import '../../domain/usecases/get_audio_files.dart';
 import '../../domain/usecases/get_cover_art.dart';
 import '../../domain/usecases/get_folder_subfolders.dart';
+import '../../domain/usecases/get_metadata.dart';
 import '../../domain/usecases/import_folder.dart';
 import '../../domain/usecases/rename_files.dart';
 import '../../util/path_utils.dart';
@@ -16,6 +18,8 @@ import '../../util/path_utils.dart';
 enum HomeStatus { initial, loading, ready, error }
 
 enum AudioStatus { idle, loading, ready, error }
+
+enum MetadataStatus { idle, loading, ready }
 
 class HomeState extends Equatable {
   const HomeState({
@@ -29,6 +33,9 @@ class HomeState extends Equatable {
     this.pendingRenames = const {},
     this.isSaving = false,
     this.notice,
+    this.selectedFilePath,
+    this.selectedMetadata,
+    this.metadataStatus = MetadataStatus.idle,
   });
 
   final HomeStatus status;
@@ -41,6 +48,9 @@ class HomeState extends Equatable {
   final Map<String, String> pendingRenames;
   final bool isSaving;
   final String? notice;
+  final String? selectedFilePath;
+  final AudioMetadataEntity? selectedMetadata;
+  final MetadataStatus metadataStatus;
 
   static const Object _unset = Object();
 
@@ -55,7 +65,12 @@ class HomeState extends Equatable {
     Map<String, String>? pendingRenames,
     bool? isSaving,
     Object? notice = _unset,
+    String? selectedFilePath,
+    AudioMetadataEntity? selectedMetadata,
+    MetadataStatus? metadataStatus,
+    Object? clearSelection = _unset,
   }) {
+    final shouldClear = identical(clearSelection, true);
     return HomeState(
       status: status ?? this.status,
       selectedFolder: selectedFolder ?? this.selectedFolder,
@@ -67,6 +82,15 @@ class HomeState extends Equatable {
       pendingRenames: pendingRenames ?? this.pendingRenames,
       isSaving: isSaving ?? this.isSaving,
       notice: identical(notice, _unset) ? this.notice : notice as String?,
+      selectedFilePath: shouldClear
+          ? null
+          : (selectedFilePath ?? this.selectedFilePath),
+      selectedMetadata: shouldClear
+          ? null
+          : (selectedMetadata ?? this.selectedMetadata),
+      metadataStatus: shouldClear
+          ? MetadataStatus.idle
+          : (metadataStatus ?? this.metadataStatus),
     );
   }
 
@@ -82,6 +106,9 @@ class HomeState extends Equatable {
         pendingRenames,
         isSaving,
         notice,
+        selectedFilePath,
+        selectedMetadata,
+        metadataStatus,
       ];
 }
 
@@ -118,6 +145,19 @@ class SavePendingRenames extends HomeEvent {
   const SavePendingRenames();
 }
 
+class FileSelected extends HomeEvent {
+  const FileSelected(this.path);
+
+  final String path;
+
+  @override
+  List<Object?> get props => [path];
+}
+
+class FileDetailClosed extends HomeEvent {
+  const FileDetailClosed();
+}
+
 class NoticeShown extends HomeEvent {
   const NoticeShown();
 }
@@ -129,11 +169,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     required this.getAudioFiles,
     required this.getCoverArt,
     required this.renameFiles,
+    required this.getMetadata,
   }) : super(const HomeState()) {
     on<ImportFolderPressed>(_onImportFolderPressed);
     on<FolderSelected>(_onFolderSelected);
     on<SwapRequested>(_onSwapRequested);
     on<SavePendingRenames>(_onSavePendingRenames);
+    on<FileSelected>(_onFileSelected);
+    on<FileDetailClosed>(_onFileDetailClosed);
     on<NoticeShown>(_onNoticeShown);
   }
 
@@ -142,6 +185,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final GetAudioFilesUseCase getAudioFiles;
   final GetCoverArtUseCase getCoverArt;
   final RenameFilesUseCase renameFiles;
+  final GetMetadataUseCase getMetadata;
 
   Future<void> _onImportFolderPressed(
     ImportFolderPressed event,
@@ -187,6 +231,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       audioStatus: AudioStatus.loading,
       audioFiles: const [],
       audioError: null,
+      clearSelection: true,
     ));
     await _loadAudioFiles(event.folder, emit);
   }
@@ -279,4 +324,33 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       emit(state.copyWith(notice: null));
     }
   }
+
+  Future<void> _onFileSelected(
+    FileSelected event,
+    Emitter<HomeState> emit,
+  ) async {
+    if (state.selectedFilePath == event.path) return;
+    emit(state.copyWith(
+      selectedFilePath: event.path,
+      selectedMetadata: null,
+      metadataStatus: MetadataStatus.loading,
+      clearSelection: false,
+    ));
+    final metadata = await loadMetadata(event.path);
+    if (!isClosed && state.selectedFilePath == event.path) {
+      emit(state.copyWith(
+        selectedMetadata: metadata,
+        metadataStatus: MetadataStatus.ready,
+      ));
+    }
+  }
+
+  void _onFileDetailClosed(FileDetailClosed event, Emitter<HomeState> emit) {
+    if (state.selectedFilePath != null) {
+      emit(state.copyWith(clearSelection: true));
+    }
+  }
+
+  Future<AudioMetadataEntity?> loadMetadata(String path) =>
+      getMetadata(path);
 }

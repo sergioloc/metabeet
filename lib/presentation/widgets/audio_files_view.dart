@@ -18,6 +18,7 @@ class AudioFilesView extends StatefulWidget {
     required this.loadCoverArt,
     required this.pendingRenames,
     required this.onSwap,
+    this.onFileSelected,
     this.error,
     this.onRetry,
   });
@@ -28,6 +29,7 @@ class AudioFilesView extends StatefulWidget {
   final Future<Uint8List?> Function(String path) loadCoverArt;
   final Map<String, String> pendingRenames;
   final void Function(String path) onSwap;
+  final void Function(String path)? onFileSelected;
   final String? error;
   final VoidCallback? onRetry;
 
@@ -229,6 +231,9 @@ itemBuilder: (context, index) {
             final isPendingSwap = widget.pendingRenames.containsKey(file.path);
             return ListTile(
               dense: true,
+              onTap: widget.onFileSelected == null
+                  ? null
+                  : () => widget.onFileSelected!(file.path),
               leading: _TrackArtwork(
                 path: file.path,
                 loadCoverArt: widget.loadCoverArt,

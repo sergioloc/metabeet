@@ -6,6 +6,7 @@ import '../widgets/app_toolbar.dart';
 import '../widgets/audio_files_view.dart';
 import '../widgets/folder_tree_view.dart';
 import '../widgets/resizable_split.dart';
+import '../widgets/song_detail_panel.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -56,30 +57,46 @@ class HomePage extends StatelessWidget {
                         .read<HomeBloc>()
                         .add(FolderSelected(folder)),
                   ),
-                  right: AudioFilesView(
-                    folderName: state.selectedFolder?.name,
-                    status: state.audioStatus,
-                    files: state.audioFiles,
-                    loadCoverArt: (path) =>
-                        context.read<HomeBloc>().loadCoverArt(path),
-                    pendingRenames: state.pendingRenames,
-                    onSwap: (path) => context
-                        .read<HomeBloc>()
-                        .add(SwapRequested(path)),
-                    error: state.audioError,
-                    onRetry: () {
-                      final folder = state.selectedFolder;
-                      if (folder != null) {
-                        context
-                            .read<HomeBloc>()
-                            .add(FolderSelected(folder));
-                      }
-                    },
-                  ),
+                  right: _buildRightPanel(context, state),
                 ),
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildRightPanel(BuildContext context, HomeState state) {
+    final right = AudioFilesView(
+      folderName: state.selectedFolder?.name,
+      status: state.audioStatus,
+      files: state.audioFiles,
+      loadCoverArt: (path) => context.read<HomeBloc>().loadCoverArt(path),
+      pendingRenames: state.pendingRenames,
+      onSwap: (path) => context.read<HomeBloc>().add(SwapRequested(path)),
+      onFileSelected: (path) =>
+          context.read<HomeBloc>().add(FileSelected(path)),
+      error: state.audioError,
+      onRetry: () {
+        final folder = state.selectedFolder;
+        if (folder != null) {
+          context.read<HomeBloc>().add(FolderSelected(folder));
+        }
+      },
+    );
+
+    if (state.selectedFilePath == null) return right;
+
+    return ResizableSplit(
+      initialFraction: 0.6,
+      minFraction: 0.3,
+      maxFraction: 0.75,
+      left: right,
+      right: SongDetailPanel(
+        status: state.metadataStatus,
+        metadata: state.selectedMetadata,
+        onClose: () =>
+            context.read<HomeBloc>().add(const FileDetailClosed()),
       ),
     );
   }
