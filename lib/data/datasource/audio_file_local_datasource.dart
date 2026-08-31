@@ -117,9 +117,8 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     return Isolate.run(() {
       try {
         final metadata = readMetadata(File(path), getImage: true);
-        final albumArtist = _resolveAlbumArtist(path, format);
         final artist =
-            _hasAlbumArtist(format) ? albumArtist : metadata.artist;
+            _hasCustomArtist(format) ? _resolveArtist(path, format) : metadata.artist;
         final duration = metadata.duration;
         final pictures = metadata.pictures;
         return AudioMetadataEntity(
@@ -194,22 +193,21 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   }
 }
 
-/// Resolves the album interpreter (album artist) for a file.
+/// Resolves the artist to use for a file.
 ///
-/// The generic `readMetadata` already prefers the album artist for MP3 via
-/// TPE2, but this helper reads the format-specific tags explicitly to keep the
-/// behaviour consistent across formats. For FLAC/OGG, `readMetadata` merges
-/// `ARTIST` and `ALBUMARTIST` into a single list so the album artist is not
-/// reliably exposed, therefore the raw Vorbis comments are read to prefer
-/// `ALBUMARTIST` over `ARTIST`. Returns null when the format has no dedicated
-/// album-artist tag.
-String? _resolveAlbumArtist(String path, AudioFormat format) {
+/// For MP3 the track artist (TPE1) is used, both for display and for the sync
+/// check. For FLAC/OGG the album artist tag is preferred, but `readMetadata`
+/// merges `ARTIST` and `ALBUMARTIST` into a single list so the raw Vorbis
+/// comments are read to isolate the album artist. The value is trimmed, and an
+/// empty value resolves to null. Returns null when the format has no dedicated
+/// artist tag.
+String? _resolveArtist(String path, AudioFormat format) {
   switch (format) {
     case AudioFormat.mp3:
       try {
         final tag = readAllMetadata(File(path));
         if (tag is Mp3Metadata) {
-          final artist = tag.bandOrOrchestra;
+          final artist = tag.leadPerformer;
           final trimmed = artist?.trim();
           return trimmed == null || trimmed.isEmpty ? null : trimmed;
         }
@@ -223,9 +221,8 @@ String? _resolveAlbumArtist(String path, AudioFormat format) {
   }
 }
 
-/// Whether [format] has a dedicated album-artist tag distinct from the track
-/// artist. For these formats only the album artist is reported.
-bool _hasAlbumArtist(AudioFormat format) =>
+/// Whether this format has dedicated artist handling in [_resolveArtist].
+bool _hasCustomArtist(AudioFormat format) =>
     format == AudioFormat.mp3 ||
     format == AudioFormat.flac ||
     format == AudioFormat.ogg;
