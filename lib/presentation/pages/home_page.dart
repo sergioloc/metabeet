@@ -5,6 +5,7 @@ import '../../domain/entities/precache_progress.dart';
 import '../bloc/home/home_bloc.dart';
 import '../widgets/app_toolbar.dart';
 import '../widgets/audio_files_view.dart';
+import '../widgets/beet_logo.dart';
 import '../widgets/folder_tree_view.dart';
 import '../widgets/resizable_split.dart';
 import '../widgets/song_detail_panel.dart';
@@ -142,11 +143,7 @@ class _EmptyState extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: colorScheme.outlineVariant),
             ),
-            child: Icon(
-              Icons.folder_open_rounded,
-              size: 44,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            child: const BeetLogo(size: 56),
           ),
           const SizedBox(height: 20),
           Text(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../utils/app_colors.dart';
+import 'beet_logo.dart';
 
 class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
   const AppToolbar({
@@ -74,7 +75,7 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// The small beet/raspberry brand mark.
+/// The app's beet logo in a soft accent-tinted tile.
 class _BrandMark extends StatelessWidget {
   const _BrandMark(this.colorScheme);
 
@@ -86,25 +87,13 @@ class _BrandMark extends StatelessWidget {
       width: 28,
       height: 28,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.accentSoft, AppColors.accent],
-        ),
+        color: AppColors.accent.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(7),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.accent.withValues(alpha: 0.35),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: AppColors.accent.withValues(alpha: 0.4),
+        ),
       ),
-      child: const Icon(
-        Icons.music_note_rounded,
-        size: 17,
-        color: Colors.white,
-      ),
+      child: const BeetLogo(size: 20),
     );
   }
 }
