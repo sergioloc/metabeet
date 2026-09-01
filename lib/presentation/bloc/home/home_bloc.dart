@@ -1,7 +1,8 @@
-import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../data/datasource/audio_file_local_datasource.dart';
 import '../../../data/datasource/folder_local_datasource.dart';
@@ -82,6 +83,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         emit(const HomeState());
         return;
       }
+      debugPrint('[HomeBloc] import folder selected: ${folder.path}');
       emit(HomeState(
         status: HomeStatus.ready,
         rootFolder: folder,
@@ -89,18 +91,22 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         audioStatus: AudioStatus.loading,
       ));
 
-      final timings = await _precacheAudioFiles.execute(
+      debugPrint('[HomeBloc] precache starting for ${folder.path}');
+      await _precacheAudioFiles.execute(
         folder.path,
         onProgress: (progress) {
           if (isClosed) return;
           emit(state.copyWith(precacheProgress: progress));
         },
       );
+      debugPrint('[HomeBloc] precache finished for ${folder.path}');
 
       final (subfolders, files) = await (
         _getFolderSubfolders.execute(folder.path),
         _getAudioFiles.execute(folder.path),
       ).wait;
+      debugPrint(
+          '[HomeBloc] loaded subfolders=${subfolders.length} files=${files.length}');
 
       if (!isClosed && state.selectedFolder?.path == folder.path) {
         emit(state.copyWith(
@@ -108,10 +114,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           audioFiles: files,
           audioStatus: AudioStatus.ready,
           precacheProgress: null,
-          precacheTimings: timings,
         ));
       }
-    } catch (error) {
+    } catch (error, stack) {
+      debugPrint('[HomeBloc] import error: $error');
+      debugPrint('[HomeBloc] import stack: $stack');
       emit(
           HomeState(status: HomeStatus.error, error: _mapError(error).message));
     }

@@ -76,10 +76,7 @@ class HomePage extends StatelessWidget {
       children: [
         content,
         Positioned.fill(
-          child: _PrecacheOverlay(
-            progress: progress,
-            timings: state.precacheTimings,
-          ),
+          child: _PrecacheOverlay(progress: progress),
         ),
       ],
     );
@@ -201,30 +198,16 @@ class _ErrorState extends StatelessWidget {
 
 /// Full-screen banner showing the folder precache progress.
 class _PrecacheOverlay extends StatelessWidget {
-  const _PrecacheOverlay({required this.progress, this.timings});
+  const _PrecacheOverlay({required this.progress});
 
   final PrecacheProgress progress;
-  final PrecacheTimings? timings;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final fraction = progress.fraction.clamp(0.0, 1.0);
-
-    final timings = this.timings;
-    String detail;
-    switch (progress.phase) {
-      case PrecachePhase.metadata:
-        detail = 'Reading metadata ${progress.done}/${progress.total}';
-      case PrecachePhase.cover:
-        if (timings != null && timings.metadataMs > 0) {
-          detail =
-              'Reading covers ${progress.done}/${progress.total} · metadata took ${timings.metadataMs} ms';
-        } else {
-          detail = 'Reading covers ${progress.done}/${progress.total}';
-        }
-    }
+    final detail = 'Importing ${progress.done}/${progress.total} files…';
 
     return ColoredBox(
       color: colorScheme.surface.withValues(alpha: 0.92),

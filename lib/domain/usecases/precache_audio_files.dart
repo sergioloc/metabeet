@@ -8,7 +8,7 @@ class PrecacheAudioFilesUseCase {
 
   final AudioFileRepository repository;
 
-  Future<PrecacheTimings> execute(
+  Future<void> execute(
     String path, {
     void Function(PrecacheProgress progress)? onProgress,
   }) =>

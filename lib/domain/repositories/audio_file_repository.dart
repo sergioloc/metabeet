@@ -11,7 +11,7 @@ abstract class AudioFileRepository {
 
   /// Eagerly loads metadata and cover art for every audio file under [path]
   /// into memory, so later reads are served from the cache.
-  Future<PrecacheTimings> precache(
+  Future<void> precache(
     String path, {
     void Function(PrecacheProgress progress)? onProgress,
   });

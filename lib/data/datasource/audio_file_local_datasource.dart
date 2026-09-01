@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:typed_data';
 
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
@@ -21,11 +21,8 @@ abstract class AudioFileLocalDataSource {
   /// Eagerly loads metadata and cover art for every audio file under [path]
   /// into memory, so later calls to [getMetadata]/[getCoverArt] are instant.
   ///
-  /// Metadata tags and cover art are read in separate phases so the caller can
-  /// track progress and measure where the time is spent. [onProgress] is called
-  /// as work advances and the returned [PrecacheTimings] reports how long each
-  /// phase took.
-  Future<PrecacheTimings> precache(
+  /// [onProgress] is called as files are processed.
+  Future<void> precache(
     String path, {
     void Function(PrecacheProgress progress)? onProgress,
   });
@@ -57,6 +54,7 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   Future<List<AudioFileModel>> getAudioFiles(String path) async {
     final files = <AudioFileModel>[];
     try {
+      debugPrint('[getAudioFiles] scanning $path');
       final entities =
           Directory(path).listSync(recursive: true, followLinks: false);
       for (final entity in entities) {
@@ -71,73 +69,108 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[getAudioFiles] error scanning $path: $e');
+    }
+    debugPrint('[getAudioFiles] found ${files.length} files under $path');
     files.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return files;
   }
 
   @override
-  Future<PrecacheTimings> precache(
+  Future<void> precache(
     String path, {
     void Function(PrecacheProgress progress)? onProgress,
   }) async {
     final files = await getAudioFiles(path);
     final paths = files.map((f) => f.path).toList();
     final total = paths.length;
+    var done = 0;
 
-    final metadataWatch = Stopwatch()..start();
-    var metadataDone = 0;
-    await _runBounded(paths, (p) async {
-      await getMetadata(p);
-      metadataDone++;
-      onProgress?.call(PrecacheProgress(
-        phase: PrecachePhase.metadata,
-        done: metadataDone,
-        total: total,
-      ));
-    });
-    metadataWatch.stop();
+    Future<void> processBatch(List<String> batch) async {
+      debugPrint('[precache] reading batch of ${batch.length}, '
+          'first=${batch.first.trim()}');
+      final results = await _runBatchInIsolate(batch);
+      for (final r in results) {
+        final path = r['path']! as String;
+        final metadata = r['metadata'] as AudioMetadataEntity?;
+        _metadataCache[path] = metadata;
+        _coverArtCache[path] = metadata?.coverArt;
+      }
+      done += batch.length;
+      onProgress?.call(PrecacheProgress(done: done, total: total));
+    }
 
-    onProgress?.call(PrecacheProgress(
-      phase: PrecachePhase.cover,
-      done: 0,
-      total: total,
-    ));
-    final coverWatch = Stopwatch()..start();
-    var coverDone = 0;
-    await _runBounded(paths, (p) async {
-      await getCoverArt(p);
-      coverDone++;
-      onProgress?.call(PrecacheProgress(
-        phase: PrecachePhase.cover,
-        done: coverDone,
-        total: total,
-      ));
-    });
-    coverWatch.stop();
+    // Process files in batches; each batch is read in a dedicated isolate, and
+    // several batches run concurrently to keep all cores busy.
+    const batchSize = 12;
+    final batches = <List<String>>[];
+    for (var i = 0; i < paths.length; i += batchSize) {
+      final end =
+          (i + batchSize) > paths.length ? paths.length : (i + batchSize);
+      batches.add(paths.sublist(i, end));
+    }
 
-    return PrecacheTimings(
-      metadataMs: metadataWatch.elapsedMilliseconds,
-      coverMs: coverWatch.elapsedMilliseconds,
-    );
+    await _runBounded(batches, processBatch);
   }
 
-  Future<void> _runBounded(
-    List<String> paths,
-    Future<void> Function(String path) task,
+  Future<void> _runBounded<T>(
+    List<T> items,
+    Future<void> Function(T item) task,
   ) async {
     var index = 0;
     Future<void> worker() async {
       while (true) {
         final current = index++;
-        if (current >= paths.length) return;
-        await task(paths[current]);
+        if (current >= items.length) return;
+        await task(items[current]);
       }
     }
 
     final count =
-        _maxConcurrentReads < paths.length ? _maxConcurrentReads : paths.length;
+        _maxConcurrentReads < items.length ? _maxConcurrentReads : items.length;
     await Future.wait([for (var i = 0; i < count; i++) worker()]);
+  }
+
+  Future<List<Map<String, Object?>>> _runBatchInIsolate(
+    List<String> batch,
+  ) async {
+    final resultsPort = ReceivePort();
+    final errorPort = ReceivePort();
+    late final Isolate isolate;
+    try {
+      isolate = await Isolate.spawn(
+        _batchEntrypoint,
+        (batch, resultsPort.sendPort, errorPort.sendPort),
+        onError: errorPort.sendPort,
+        errorsAreFatal: true,
+      );
+    } catch (e) {
+      resultsPort.close();
+      errorPort.close();
+      debugPrint('[precache] isolate spawn failed: $e');
+      rethrow;
+    }
+
+    final completer = Completer<List<Map<String, Object?>>>();
+    errorPort.listen((message) {
+      if (!completer.isCompleted) {
+        completer.completeError(StateError('Isolate error: $message'));
+      }
+    });
+    resultsPort.listen((message) {
+      if (!completer.isCompleted) {
+        completer.complete((message as List).cast<Map<String, Object?>>());
+      }
+    });
+
+    try {
+      return await completer.future;
+    } finally {
+      resultsPort.close();
+      errorPort.close();
+      isolate.kill(priority: Isolate.immediate);
+    }
   }
 
   @override
@@ -212,6 +245,7 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     try {
       final result = await future;
       _metadataCache[path] = result;
+      if (result != null) _coverArtCache[path] = result.coverArt;
       return result;
     } finally {
       _metadataInFlight.remove(path);
@@ -223,11 +257,12 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     if (format == null) return Future.value(null);
     return Isolate.run(() {
       try {
-        final metadata = readMetadata(File(path), getImage: false);
+        final metadata = readMetadata(File(path), getImage: true);
         final artist = _hasCustomArtist(format)
             ? _resolveArtist(path, format)
             : metadata.artist;
         final duration = metadata.duration;
+        final pictures = metadata.pictures;
         return AudioMetadataEntity(
           path: path,
           name: nameFromPath(path),
@@ -242,7 +277,7 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
               duration != null && duration > Duration.zero ? duration : null,
           bitrate: metadata.bitrate,
           sampleRate: metadata.sampleRate,
-          coverArt: null,
+          coverArt: pictures.isEmpty ? null : pictures.first.bytes,
         );
       } catch (_) {
         return null;
@@ -425,3 +460,59 @@ String? _vorbisCommentValue(String path, List<String> targets) {
 
 String? _vorbisAlbumArtist(String path) => _vorbisCommentValue(
     path, ['albumartist=', 'album_artist=', 'album artist=']);
+
+/// Entrypoint for an isolate that reads a batch of audio files and replies
+/// with their metadata. Everything here is top-level so no unsendable state is
+/// captured across the isolate boundary.
+void _batchEntrypoint(
+  (List<String>, SendPort, SendPort) args,
+) {
+  final (paths, resultsPort, _) = args;
+  final results = _readBatch(paths);
+  resultsPort.send(results);
+}
+
+/// Reads a batch of audio files off the main isolate, returning their
+/// metadata (with embedded cover art). Each file touches the disk once. Values
+/// cross the isolate boundary either as primitives or via [Uint8List], which
+/// Dart's isolate library can transfer.
+List<Map<String, Object?>> _readBatch(List<String> paths) {
+  final results = <Map<String, Object?>>[];
+  for (final path in paths) {
+    final format = AudioFormat.fromPath(path);
+    if (format == null) {
+      results.add({'path': path, 'metadata': null});
+      continue;
+    }
+    try {
+      final metadata = readMetadata(File(path), getImage: true);
+      final artist = _hasCustomArtist(format)
+          ? _resolveArtist(path, format)
+          : metadata.artist;
+      final duration = metadata.duration;
+      final pictures = metadata.pictures;
+      results.add({
+        'path': path,
+        'metadata': AudioMetadataEntity(
+          path: path,
+          name: nameFromPath(path),
+          format: format,
+          title: metadata.title,
+          artist: artist,
+          album: metadata.album,
+          genre: metadata.genres.isEmpty ? null : metadata.genres.first,
+          year: metadata.year?.year,
+          track: metadata.trackNumber,
+          duration:
+              duration != null && duration > Duration.zero ? duration : null,
+          bitrate: metadata.bitrate,
+          sampleRate: metadata.sampleRate,
+          coverArt: pictures.isEmpty ? null : pictures.first.bytes,
+        ),
+      });
+    } catch (_) {
+      results.add({'path': path, 'metadata': null});
+    }
+  }
+  return results;
+}

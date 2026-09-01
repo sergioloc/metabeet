@@ -20,7 +20,7 @@ class AudioFileRepositoryImpl implements AudioFileRepository {
   }
 
   @override
-  Future<PrecacheTimings> precache(
+  Future<void> precache(
     String path, {
     void Function(PrecacheProgress progress)? onProgress,
   }) =>
