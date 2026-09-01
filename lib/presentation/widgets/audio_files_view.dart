@@ -49,6 +49,7 @@ class AudioFilesView extends StatefulWidget {
 
 class _AudioFilesViewState extends State<AudioFilesView> {
   final TextEditingController _searchController = TextEditingController();
+  final Map<String, _SyncState> _syncStates = {};
   String _query = '';
 
   @override
@@ -59,12 +60,18 @@ class _AudioFilesViewState extends State<AudioFilesView> {
     });
   }
 
+  void _onSyncStateChanged(String path, _SyncState state) {
+    if (_syncStates[path] == state) return;
+    setState(() => _syncStates[path] = state);
+  }
+
   @override
   void didUpdateWidget(AudioFilesView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.folderName != widget.folderName) {
       _searchController.clear();
       _query = '';
+      _syncStates.clear();
     }
   }
 
@@ -233,14 +240,15 @@ class _AudioFilesViewState extends State<AudioFilesView> {
         return ListView.separated(
           itemCount: files.length,
           separatorBuilder: (context, index) => const Divider(height: 1),
-itemBuilder: (context, index) {
+          itemBuilder: (context, index) {
             final file = files[index];
-            final displayName =
-                nameWithoutExtension(widget.pendingRenames[file.path] ?? file.path);
+            final displayName = nameWithoutExtension(
+                widget.pendingRenames[file.path] ?? file.path);
             final hasSingleDash = displayName.split('-').length - 1 == 1;
             final isPendingSwap = widget.pendingRenames.containsKey(file.path);
             final isPendingSync =
                 widget.pendingMetadataUpdates.containsKey(file.path);
+            final syncState = _syncStates[file.path];
             return GestureDetector(
               onSecondaryTapDown: (details) {
                 _showContextMenu(
@@ -268,7 +276,8 @@ itemBuilder: (context, index) {
                       child: Container(
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: _chipColor(file.format).withValues(alpha: 0.14),
+                          color:
+                              _chipColor(file.format).withValues(alpha: 0.14),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: _chipColor(file.format).withValues(
@@ -292,6 +301,7 @@ itemBuilder: (context, index) {
                     _SyncBadge(
                       filePath: file.path,
                       loadMetadata: widget.loadMetadata,
+                      onStateChanged: _onSyncStateChanged,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -307,6 +317,23 @@ itemBuilder: (context, index) {
                             : null,
                       ),
                     ),
+                    if (widget.onSyncFromName != null &&
+                        syncState == _SyncState.mismatch)
+                      IconButton(
+                        onPressed: () => widget.onSyncFromName!(file.path),
+                        icon: const Icon(Icons.sync, size: 18),
+                        tooltip: isPendingSync
+                            ? 'Undo metadata update'
+                            : 'Update metadata from file name',
+                        color: isPendingSync
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 24,
+                        ),
+                      ),
                     if (hasSingleDash)
                       IconButton(
                         onPressed: () => widget.onSwap(file.path),
@@ -321,24 +348,6 @@ itemBuilder: (context, index) {
                           minHeight: 24,
                         ),
                       ),
-                      if (widget.onSyncFromName != null && hasSingleDash)
-                        IconButton(
-                          onPressed: widget.onSyncFromName == null
-                              ? null
-                              : () => widget.onSyncFromName!(file.path),
-                          icon: const Icon(Icons.sync, size: 18),
-                          tooltip: isPendingSync
-                              ? 'Undo metadata update'
-                              : 'Update metadata from file name',
-                          color: isPendingSync
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 24,
-                          ),
-                        ),
                   ],
                 ),
               ),
@@ -421,8 +430,7 @@ itemBuilder: (context, index) {
     widget.onRename!(path, newName);
   }
 
-  String _fileCountLabel(int count) =>
-      count == 1 ? '1 file' : '$count files';
+  String _fileCountLabel(int count) => count == 1 ? '1 file' : '$count files';
 }
 
 /// Shows the track's embedded cover art, or a music icon as fallback.
@@ -472,7 +480,8 @@ class _TrackArtworkState extends State<_TrackArtwork> {
         borderRadius: BorderRadius.circular(4),
       ),
       child: showNote
-          ? Icon(Icons.music_note, size: 20, color: colorScheme.onSurfaceVariant)
+          ? Icon(Icons.music_note,
+              size: 20, color: colorScheme.onSurfaceVariant)
           : null,
     );
   }
@@ -507,10 +516,12 @@ class _SyncBadge extends StatefulWidget {
   const _SyncBadge({
     required this.filePath,
     required this.loadMetadata,
+    this.onStateChanged,
   });
 
   final String filePath;
   final Future<AudioMetadataEntity?> Function(String path) loadMetadata;
+  final void Function(String path, _SyncState state)? onStateChanged;
 
   @override
   State<_SyncBadge> createState() => _SyncBadgeState();
@@ -535,9 +546,11 @@ class _SyncBadgeState extends State<_SyncBadge> {
       metadata = null;
     }
     if (!mounted) return;
+    final state = _computeSync(widget.filePath, metadata);
     setState(() {
-      _state = _computeSync(widget.filePath, metadata);
+      _state = state;
     });
+    widget.onStateChanged?.call(widget.filePath, state);
   }
 
   @override
