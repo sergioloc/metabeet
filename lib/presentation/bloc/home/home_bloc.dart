@@ -41,7 +41,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<FileSelected>(_onFileSelected);
     on<FileDetailClosed>(_onFileDetailClosed);
     on<NoticeShown>(_onNoticeShown);
-    on<PrecacheDismissed>(_onPrecacheDismissed);
   }
 
   final FolderRepository _folderRepository = FolderRepositoryImpl(
@@ -108,11 +107,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           rootFolders: subfolders,
           audioFiles: files,
           audioStatus: AudioStatus.ready,
-          precacheProgress: PrecacheProgress(
-            phase: PrecachePhase.cover,
-            done: files.length,
-            total: files.length,
-          ),
+          precacheProgress: null,
           precacheTimings: timings,
         ));
       }
@@ -284,15 +279,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   void _onNoticeShown(NoticeShown event, Emitter<HomeState> emit) {
     if (state.notice != null) {
       emit(state.copyWith(notice: null));
-    }
-  }
-
-  void _onPrecacheDismissed(PrecacheDismissed event, Emitter<HomeState> emit) {
-    if (state.precacheProgress != null || state.precacheTimings != null) {
-      emit(state.copyWith(
-        precacheProgress: null,
-        precacheTimings: null,
-      ));
     }
   }
 

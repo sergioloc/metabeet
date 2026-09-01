@@ -213,23 +213,17 @@ class _PrecacheOverlay extends StatelessWidget {
     final fraction = progress.fraction.clamp(0.0, 1.0);
 
     final timings = this.timings;
-    final isComplete = progress.done >= progress.total && progress.total > 0;
-
     String detail;
-    if (isComplete) {
-      detail = 'Completed ${progress.total} files';
-    } else {
-      switch (progress.phase) {
-        case PrecachePhase.metadata:
-          detail = 'Reading metadata ${progress.done}/${progress.total}';
-        case PrecachePhase.cover:
-          if (timings != null && timings.metadataMs > 0) {
-            detail =
-                'Reading covers ${progress.done}/${progress.total} · metadata took ${timings.metadataMs} ms';
-          } else {
-            detail = 'Reading covers ${progress.done}/${progress.total}';
-          }
-      }
+    switch (progress.phase) {
+      case PrecachePhase.metadata:
+        detail = 'Reading metadata ${progress.done}/${progress.total}';
+      case PrecachePhase.cover:
+        if (timings != null && timings.metadataMs > 0) {
+          detail =
+              'Reading covers ${progress.done}/${progress.total} · metadata took ${timings.metadataMs} ms';
+        } else {
+          detail = 'Reading covers ${progress.done}/${progress.total}';
+        }
     }
 
     return ColoredBox(
@@ -244,15 +238,13 @@ class _PrecacheOverlay extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Icon(
-                  isComplete
-                      ? Icons.check_circle_outline
-                      : Icons.folder_open_outlined,
+                  Icons.folder_open_outlined,
                   size: 40,
                   color: colorScheme.primary,
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  isComplete ? 'Import complete' : 'Importing folder…',
+                  'Importing folder…',
                   style: textTheme.titleMedium,
                 ),
                 const SizedBox(height: 4),
@@ -270,27 +262,6 @@ class _PrecacheOverlay extends StatelessWidget {
                     value: fraction == 0 ? null : fraction,
                   ),
                 ),
-                if (fraction >= 1.0) ...[
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: () =>
-                        context.read<HomeBloc>().add(const PrecacheDismissed()),
-                    icon: const Icon(Icons.check),
-                    label: const Text('Done'),
-                  ),
-                ] else ...[
-                  if (timings != null &&
-                      timings.metadataMs > 0 &&
-                      timings.coverMs > 0) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'metadata ${timings.metadataMs} ms · cover ${timings.coverMs} ms',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ],
               ],
             ),
           ),
