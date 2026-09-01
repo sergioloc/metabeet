@@ -26,6 +26,7 @@ enum MetadataStatus { idle, loading, ready }
 class HomeState extends Equatable {
   const HomeState({
     this.status = HomeStatus.initial,
+    this.rootFolder,
     this.selectedFolder,
     this.rootFolders = const [],
     this.error,
@@ -42,6 +43,7 @@ class HomeState extends Equatable {
   });
 
   final HomeStatus status;
+  final FolderEntity? rootFolder;
   final FolderEntity? selectedFolder;
   final List<FolderEntity> rootFolders;
   final String? error;
@@ -60,6 +62,7 @@ class HomeState extends Equatable {
 
   HomeState copyWith({
     HomeStatus? status,
+    FolderEntity? rootFolder,
     FolderEntity? selectedFolder,
     List<FolderEntity>? rootFolders,
     String? error,
@@ -78,6 +81,7 @@ class HomeState extends Equatable {
     final shouldClear = identical(clearSelection, true);
     return HomeState(
       status: status ?? this.status,
+      rootFolder: rootFolder ?? this.rootFolder,
       selectedFolder: selectedFolder ?? this.selectedFolder,
       rootFolders: rootFolders ?? this.rootFolders,
       error: error ?? this.error,
@@ -104,6 +108,7 @@ class HomeState extends Equatable {
   @override
   List<Object?> get props => [
         status,
+        rootFolder,
         selectedFolder,
         rootFolders,
         error,
@@ -231,6 +236,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       }
       emit(HomeState(
         status: HomeStatus.ready,
+        rootFolder: folder,
         selectedFolder: folder,
         audioStatus: AudioStatus.loading,
       ));
@@ -367,7 +373,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         ]);
       }
 
-      final folder = state.selectedFolder;
+      final folder = state.rootFolder ?? state.selectedFolder;
       if (folder == null) {
         emit(state.copyWith(
           pendingRenames: const {},
@@ -379,13 +385,25 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       }
 
       emit(state.copyWith(
+        selectedFolder: folder,
         pendingRenames: const {},
         pendingMetadataUpdates: const {},
         isSaving: false,
         audioStatus: AudioStatus.loading,
         audioFiles: const [],
+        clearSelection: true,
       ));
-      await _loadAudioFiles(folder, emit);
+      final (subfolders, files) = await (
+        getFolderSubfolders(folder.path),
+        getAudioFiles(folder.path),
+      ).wait;
+      if (!isClosed && state.rootFolder?.path == folder.path) {
+        emit(state.copyWith(
+          rootFolders: subfolders,
+          audioFiles: files,
+          audioStatus: AudioStatus.ready,
+        ));
+      }
       if (!isClosed) {
         emit(state.copyWith(notice: 'Changes saved'));
       }
