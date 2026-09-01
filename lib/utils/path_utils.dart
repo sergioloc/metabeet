@@ -1,0 +1,60 @@
+String nameFromPath(String path) {
+  final segments = path
+      .split(RegExp(r'[\\/]'))
+      .where((segment) => segment.isNotEmpty)
+      .toList();
+  return segments.isEmpty ? path : segments.last;
+}
+
+String nameWithoutExtension(String path) {
+  final name = nameFromPath(path);
+  final index = name.lastIndexOf('.');
+  return index <= 0 ? name : name.substring(0, index);
+}
+
+String extensionFromPath(String path) {
+  final name = nameFromPath(path);
+  final index = name.lastIndexOf('.');
+  return index <= 0 ? '' : name.substring(index + 1);
+}
+
+/// Splits a "Title - Artist" file name into its two parts (title first).
+/// Returns null when the name does not contain exactly one hyphen.
+({String title, String artist})? splitTitleArtist(String filePath) {
+  final name = nameWithoutExtension(filePath);
+  final separator = name.indexOf(' - ');
+  if (separator == -1) return null;
+  final title = name.substring(0, separator).trim();
+  final artist = name.substring(separator + 3).trim();
+  if (title.isEmpty || artist.isEmpty || artist.contains(' - ')) {
+    return null;
+  }
+  return (title: title, artist: artist);
+}
+
+/// Swaps the two parts of a file name around its single hyphen,
+/// returning the new full path. Returns null when the name does not
+/// contain exactly one hyphen.
+String? swapNamePath(String path) {
+  final name = nameWithoutExtension(path);
+  final firstIndex = name.indexOf('-');
+  if (firstIndex == -1 || name.indexOf('-', firstIndex + 1) != -1) {
+    return null;
+  }
+  final first = name.substring(0, firstIndex).trim();
+  final second = name.substring(firstIndex + 1).trim();
+  final extension = extensionFromPath(path);
+  final dir = path.substring(0, path.length - nameFromPath(path).length);
+  final swapped = '$second - $first';
+  return '$dir$swapped${extension.isEmpty ? '' : '.$extension'}';
+}
+
+/// Builds the full path for [path] after renaming it to
+/// [newNameWithoutExtension] inside the same directory, preserving the
+/// original extension.
+String renamePath(String path, String newNameWithoutExtension) {
+  final extension = extensionFromPath(path);
+  final dir = path.substring(0, path.length - nameFromPath(path).length);
+  final name = newNameWithoutExtension.trim();
+  return '$dir$name${extension.isEmpty ? '' : '.$extension'}';
+}
