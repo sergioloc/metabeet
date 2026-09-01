@@ -10,7 +10,7 @@ import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
 import '../../domain/entities/metadata_update_request.dart';
 import '../../domain/enum/audio_format.dart';
-import '../../util/path_utils.dart';
+import '../../utils/path_utils.dart';
 import '../model/audio_file_model.dart';
 
 /// Reads audio files and their cover art from disk.
@@ -24,7 +24,9 @@ abstract class AudioFileLocalDataSource {
   Future<void> renameFiles(List<FileRenameRequest> requests);
 
   Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests);
-}/// Reads cover art off the UI thread and caches recent results.
+}
+
+/// Reads cover art off the UI thread and caches recent results.
 class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   AudioFileLocalDataSourceImpl({int maxConcurrentReads = 4})
       : _maxConcurrentReads = maxConcurrentReads;
@@ -118,8 +120,9 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     return Isolate.run(() {
       try {
         final metadata = readMetadata(File(path), getImage: true);
-        final artist =
-            _hasCustomArtist(format) ? _resolveArtist(path, format) : metadata.artist;
+        final artist = _hasCustomArtist(format)
+            ? _resolveArtist(path, format)
+            : metadata.artist;
         final duration = metadata.duration;
         final pictures = metadata.pictures;
         return AudioMetadataEntity(
@@ -132,9 +135,8 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
           genre: metadata.genres.isEmpty ? null : metadata.genres.first,
           year: metadata.year?.year,
           track: metadata.trackNumber,
-          duration: duration != null && duration > Duration.zero
-              ? duration
-              : null,
+          duration:
+              duration != null && duration > Duration.zero ? duration : null,
           bitrate: metadata.bitrate,
           sampleRate: metadata.sampleRate,
           coverArt: pictures.isEmpty ? null : pictures.first.bytes,
@@ -298,8 +300,7 @@ String? _vorbisCommentValue(String path, List<String> targets) {
       final valueLength = entryLength - target.length;
       if (entryLength <= 0 || valueLength <= 0) continue;
       final valueOffset = keyIndex + target.length;
-      final valueBytes =
-          bytes.sublist(valueOffset, valueOffset + valueLength);
+      final valueBytes = bytes.sublist(valueOffset, valueOffset + valueLength);
       final value = _decodeUtf8Bytes(valueBytes);
       if (value != null && value.trim().isNotEmpty) return value.trim();
     }
@@ -307,5 +308,5 @@ String? _vorbisCommentValue(String path, List<String> targets) {
   return null;
 }
 
-String? _vorbisAlbumArtist(String path) =>
-    _vorbisCommentValue(path, ['albumartist=', 'album_artist=', 'album artist=']);
+String? _vorbisAlbumArtist(String path) => _vorbisCommentValue(
+    path, ['albumartist=', 'album_artist=', 'album artist=']);

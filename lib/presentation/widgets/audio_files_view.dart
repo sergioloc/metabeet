@@ -6,9 +6,9 @@ import '../../domain/enum/audio_format.dart';
 import '../../domain/entities/audio_file_entity.dart';
 import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/metadata_update_request.dart';
-import '../../util/app_colors.dart';
-import '../../util/path_utils.dart';
-import '../bloc/home_bloc.dart';
+import '../../utils/app_colors.dart';
+import '../../utils/path_utils.dart';
+import '../bloc/home/home_bloc.dart';
 
 /// Right panel: shows the audio files of the selected folder, with search.
 class AudioFilesView extends StatefulWidget {

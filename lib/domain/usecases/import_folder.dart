@@ -6,5 +6,5 @@ class ImportFolderUseCase {
 
   final FolderRepository repository;
 
-  Future<FolderEntity?> call() => repository.pickFolder();
+  Future<FolderEntity?> execute() => repository.pickFolder();
 }

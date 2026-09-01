@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/enum/audio_format.dart';
-import '../bloc/home_bloc.dart';
+import '../bloc/home/home_bloc.dart';
 
 /// Right panel showing the details of the selected audio file.
 class SongDetailPanel extends StatelessWidget {
@@ -129,9 +129,8 @@ class SongDetailPanel extends StatelessWidget {
         ),
         _DetailRow(
           label: 'Sample rate',
-          value: meta.sampleRate == null
-              ? _emptyValue
-              : '${meta.sampleRate} Hz',
+          value:
+              meta.sampleRate == null ? _emptyValue : '${meta.sampleRate} Hz',
         ),
       ];
 
@@ -177,7 +176,8 @@ class _CoverArt extends StatelessWidget {
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(Icons.music_note, size: 64, color: colorScheme.onSurfaceVariant),
+      child:
+          Icon(Icons.music_note, size: 64, color: colorScheme.onSurfaceVariant),
     );
 
     final data = bytes;
@@ -223,14 +223,19 @@ class _Section extends StatelessWidget {
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+            border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
           ),
           child: Column(
             children: [
               for (var i = 0; i < rows.length; i++) ...[
-                if (i > 0) Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                if (i > 0)
+                  Divider(
+                      height: 1,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

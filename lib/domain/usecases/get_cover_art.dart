@@ -7,5 +7,5 @@ class GetCoverArtUseCase {
 
   final AudioFileRepository repository;
 
-  Future<Uint8List?> call(String path) => repository.getCoverArt(path);
+  Future<Uint8List?> execute(String path) => repository.getCoverArt(path);
 }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 /// Central place for all the app colors.
 abstract final class AppColors {
-
   static const Color accent = Color(0xFFB92A52);
 
   static const Color darkSurface = Color(0xFF1E1E1E);
@@ -39,5 +38,4 @@ abstract final class AppColors {
   static const MaterialColor m4a = Colors.teal;
   static const MaterialColor wma = Colors.indigo;
   static const MaterialColor aiff = Colors.brown;
-
 }

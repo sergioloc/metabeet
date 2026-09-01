@@ -76,8 +76,7 @@ class _ResizeHandle extends StatelessWidget {
       cursor: SystemMouseCursors.resizeLeftRight,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: (details) =>
-            onHorizontalDrag(details.delta.dx),
+        onHorizontalDragUpdate: (details) => onHorizontalDrag(details.delta.dx),
         child: Container(
           width: 8,
           color: colorScheme.outlineVariant.withValues(alpha: 0.4),

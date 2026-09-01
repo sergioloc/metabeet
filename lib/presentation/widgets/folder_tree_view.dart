@@ -137,8 +137,7 @@ class _FolderTreeNodeState extends State<_FolderTreeNode> {
 
   bool get _isSelected => widget.selectedFolderPath == widget.folder.path;
 
-  bool get _hasSubfolders =>
-      _children != null && _children!.isNotEmpty;
+  bool get _hasSubfolders => _children != null && _children!.isNotEmpty;
 
   @override
   void initState() {
@@ -198,9 +197,8 @@ class _FolderTreeNodeState extends State<_FolderTreeNode> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.bodyMedium?.copyWith(
-                            fontWeight: _isSelected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
+                            fontWeight:
+                                _isSelected ? FontWeight.w600 : FontWeight.w400,
                           ),
                         ),
                       ),

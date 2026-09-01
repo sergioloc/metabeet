@@ -6,6 +6,6 @@ class GetFolderSubfoldersUseCase {
 
   final FolderRepository repository;
 
-  Future<List<FolderEntity>> call(String path) =>
+  Future<List<FolderEntity>> execute(String path) =>
       repository.getDirectSubfolders(path);
 }

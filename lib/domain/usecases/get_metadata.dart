@@ -6,6 +6,6 @@ class GetMetadataUseCase {
 
   final AudioFileRepository repository;
 
-  Future<AudioMetadataEntity?> call(String path) =>
+  Future<AudioMetadataEntity?> execute(String path) =>
       repository.getMetadata(path);
 }

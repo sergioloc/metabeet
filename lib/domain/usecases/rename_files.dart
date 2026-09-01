@@ -6,6 +6,6 @@ class RenameFilesUseCase {
 
   final AudioFileRepository repository;
 
-  Future<void> call(List<FileRenameRequest> requests) =>
+  Future<void> execute(List<FileRenameRequest> requests) =>
       repository.renameFiles(requests);
 }

@@ -6,6 +6,6 @@ class UpdateMetadataFromNameUseCase {
 
   final AudioFileRepository repository;
 
-  Future<void> call(List<MetadataUpdateRequest> requests) =>
+  Future<void> execute(List<MetadataUpdateRequest> requests) =>
       repository.updateMetadataFromFiles(requests);
 }

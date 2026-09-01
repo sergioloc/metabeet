@@ -1,39 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'data/datasource/audio_file_local_datasource.dart';
-import 'data/datasource/folder_local_datasource.dart';
-import 'data/repositories/audio_file_repository_impl.dart';
-import 'data/repositories/folder_repository_impl.dart';
-import 'domain/repositories/audio_file_repository.dart';
-import 'domain/repositories/folder_repository.dart';
-import 'domain/usecases/get_audio_files.dart';
-import 'domain/usecases/get_cover_art.dart';
-import 'domain/usecases/get_folder_subfolders.dart';
-import 'domain/usecases/get_metadata.dart';
-import 'domain/usecases/import_folder.dart';
-import 'domain/usecases/rename_files.dart';
-import 'domain/usecases/update_metadata_from_name.dart';
-import 'presentation/bloc/home_bloc.dart';
+import 'presentation/bloc/home/home_bloc.dart';
 import 'presentation/pages/home_page.dart';
-import 'util/app_colors.dart';
+import 'utils/app_colors.dart';
 
 void main() {
-  final FolderRepository folderRepository = FolderRepositoryImpl(
-    const FolderLocalDataSourceImpl(),
-  );
-  final AudioFileRepository audioFileRepository = AudioFileRepositoryImpl(
-    AudioFileLocalDataSourceImpl(),
-  );
-  final homeBloc = HomeBloc(
-    importFolder: ImportFolderUseCase(folderRepository),
-    getFolderSubfolders: GetFolderSubfoldersUseCase(folderRepository),
-    getAudioFiles: GetAudioFilesUseCase(audioFileRepository),
-    getCoverArt: GetCoverArtUseCase(audioFileRepository),
-    renameFiles: RenameFilesUseCase(audioFileRepository),
-    getMetadata: GetMetadataUseCase(audioFileRepository),
-    updateMetadataFromName: UpdateMetadataFromNameUseCase(audioFileRepository),
-  );
+  final homeBloc = HomeBloc();
 
   runApp(MetabeetApp(bloc: homeBloc));
 }
@@ -88,13 +61,11 @@ ThemeData _buildTheme(Brightness brightness) {
         ? AppColors.darkSurfaceContainerHighest
         : AppColors.lightSurfaceContainerHighest,
     surfaceDim: isDark ? AppColors.darkSurfaceDim : AppColors.lightSurfaceDim,
-    surfaceBright: isDark
-        ? AppColors.darkSurfaceBright
-        : AppColors.lightSurfaceBright,
+    surfaceBright:
+        isDark ? AppColors.darkSurfaceBright : AppColors.lightSurfaceBright,
     outline: isDark ? AppColors.darkOutline : AppColors.lightOutline,
-    outlineVariant: isDark
-        ? AppColors.darkOutlineVariant
-        : AppColors.lightOutlineVariant,
+    outlineVariant:
+        isDark ? AppColors.darkOutlineVariant : AppColors.lightOutlineVariant,
   );
   return ThemeData(
     colorScheme: scheme,

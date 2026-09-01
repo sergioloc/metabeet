@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../bloc/home_bloc.dart';
+import '../bloc/home/home_bloc.dart';
 import '../widgets/app_toolbar.dart';
 import '../widgets/audio_files_view.dart';
 import '../widgets/folder_tree_view.dart';
@@ -31,18 +31,16 @@ class HomePage extends StatelessWidget {
               onImportPressed: state.status == HomeStatus.loading ||
                       state.isSaving
                   ? null
-                  : () => context
-                      .read<HomeBloc>()
-                      .add(const ImportFolderPressed()),
-onSavePressed: (state.pendingRenames.isEmpty &&
-              state.pendingMetadataUpdates.isEmpty) ||
-              state.isSaving
-              ? null
-              : () => context
-                  .read<HomeBloc>()
-                  .add(const SavePendingRenames()),
-              saveCount:
-                  state.pendingRenames.length + state.pendingMetadataUpdates.length,
+                  : () =>
+                      context.read<HomeBloc>().add(const ImportFolderPressed()),
+              onSavePressed: (state.pendingRenames.isEmpty &&
+                          state.pendingMetadataUpdates.isEmpty) ||
+                      state.isSaving
+                  ? null
+                  : () =>
+                      context.read<HomeBloc>().add(const SavePendingRenames()),
+              saveCount: state.pendingRenames.length +
+                  state.pendingMetadataUpdates.length,
             ),
             body: switch (state.status) {
               HomeStatus.initial => const _EmptyState(),
@@ -56,9 +54,8 @@ onSavePressed: (state.pendingRenames.isEmpty &&
                     loadChildren: (path) =>
                         context.read<HomeBloc>().loadSubfolders(path),
                     selectedFolderPath: state.selectedFolder?.path,
-                    onFolderSelected: (folder) => context
-                        .read<HomeBloc>()
-                        .add(FolderSelected(folder)),
+                    onFolderSelected: (folder) =>
+                        context.read<HomeBloc>().add(FolderSelected(folder)),
                   ),
                   right: _buildRightPanel(context, state),
                 ),
@@ -104,8 +101,7 @@ onSavePressed: (state.pendingRenames.isEmpty &&
       right: SongDetailPanel(
         status: state.metadataStatus,
         metadata: state.selectedMetadata,
-        onClose: () =>
-            context.read<HomeBloc>().add(const FileDetailClosed()),
+        onClose: () => context.read<HomeBloc>().add(const FileDetailClosed()),
       ),
     );
   }
@@ -171,9 +167,8 @@ class _ErrorState extends StatelessWidget {
             ],
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: () => context
-                  .read<HomeBloc>()
-                  .add(const ImportFolderPressed()),
+              onPressed: () =>
+                  context.read<HomeBloc>().add(const ImportFolderPressed()),
               icon: const Icon(Icons.refresh),
               label: const Text('Try again'),
             ),

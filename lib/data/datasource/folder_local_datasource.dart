@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 
-import '../../util/path_utils.dart';
+import '../../utils/path_utils.dart';
 import '../model/folder_model.dart';
 
 abstract class FolderLocalDataSource {

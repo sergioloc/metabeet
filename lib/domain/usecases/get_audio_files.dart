@@ -6,5 +6,6 @@ class GetAudioFilesUseCase {
 
   final AudioFileRepository repository;
 
-  Future<List<AudioFileEntity>> call(String path) => repository.getAudioFiles(path);
+  Future<List<AudioFileEntity>> execute(String path) =>
+      repository.getAudioFiles(path);
 }
