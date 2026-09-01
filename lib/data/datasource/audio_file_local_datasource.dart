@@ -9,6 +9,7 @@ import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
 import '../../domain/entities/metadata_update_request.dart';
+import '../../domain/entities/precache_progress.dart';
 import '../../domain/enum/audio_format.dart';
 import '../../utils/path_utils.dart';
 import '../model/audio_file_model.dart';
@@ -19,7 +20,15 @@ abstract class AudioFileLocalDataSource {
 
   /// Eagerly loads metadata and cover art for every audio file under [path]
   /// into memory, so later calls to [getMetadata]/[getCoverArt] are instant.
-  Future<void> precache(String path);
+  ///
+  /// Metadata tags and cover art are read in separate phases so the caller can
+  /// track progress and measure where the time is spent. [onProgress] is called
+  /// as work advances and the returned [PrecacheTimings] reports how long each
+  /// phase took.
+  Future<PrecacheTimings> precache(
+    String path, {
+    void Function(PrecacheProgress progress)? onProgress,
+  });
 
   Future<Uint8List?> getCoverArt(String path);
 
@@ -68,16 +77,61 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   }
 
   @override
-  Future<void> precache(String path) async {
+  Future<PrecacheTimings> precache(
+    String path, {
+    void Function(PrecacheProgress progress)? onProgress,
+  }) async {
     final files = await getAudioFiles(path);
     final paths = files.map((f) => f.path).toList();
+    final total = paths.length;
 
+    final metadataWatch = Stopwatch()..start();
+    var metadataDone = 0;
+    await _runBounded(paths, (p) async {
+      await getMetadata(p);
+      metadataDone++;
+      onProgress?.call(PrecacheProgress(
+        phase: PrecachePhase.metadata,
+        done: metadataDone,
+        total: total,
+      ));
+    });
+    metadataWatch.stop();
+
+    onProgress?.call(PrecacheProgress(
+      phase: PrecachePhase.cover,
+      done: 0,
+      total: total,
+    ));
+    final coverWatch = Stopwatch()..start();
+    var coverDone = 0;
+    await _runBounded(paths, (p) async {
+      await getCoverArt(p);
+      coverDone++;
+      onProgress?.call(PrecacheProgress(
+        phase: PrecachePhase.cover,
+        done: coverDone,
+        total: total,
+      ));
+    });
+    coverWatch.stop();
+
+    return PrecacheTimings(
+      metadataMs: metadataWatch.elapsedMilliseconds,
+      coverMs: coverWatch.elapsedMilliseconds,
+    );
+  }
+
+  Future<void> _runBounded(
+    List<String> paths,
+    Future<void> Function(String path) task,
+  ) async {
     var index = 0;
     Future<void> worker() async {
       while (true) {
         final current = index++;
         if (current >= paths.length) return;
-        await getMetadata(paths[current]);
+        await task(paths[current]);
       }
     }
 
@@ -91,8 +145,6 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     if (_coverArtCache.containsKey(path)) {
       return _coverArtCache[path];
     }
-    final metadata = _metadataCache[path];
-    if (metadata != null) return metadata.coverArt;
 
     final inFlight = _coverArtInFlight[path];
     if (inFlight != null) return inFlight;
@@ -160,7 +212,6 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     try {
       final result = await future;
       _metadataCache[path] = result;
-      _coverArtCache[path] = result?.coverArt;
       return result;
     } finally {
       _metadataInFlight.remove(path);
@@ -172,12 +223,11 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     if (format == null) return Future.value(null);
     return Isolate.run(() {
       try {
-        final metadata = readMetadata(File(path), getImage: true);
+        final metadata = readMetadata(File(path), getImage: false);
         final artist = _hasCustomArtist(format)
             ? _resolveArtist(path, format)
             : metadata.artist;
         final duration = metadata.duration;
-        final pictures = metadata.pictures;
         return AudioMetadataEntity(
           path: path,
           name: nameFromPath(path),
@@ -192,7 +242,7 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
               duration != null && duration > Duration.zero ? duration : null,
           bitrate: metadata.bitrate,
           sampleRate: metadata.sampleRate,
-          coverArt: pictures.isEmpty ? null : pictures.first.bytes,
+          coverArt: null,
         );
       } catch (_) {
         return null;

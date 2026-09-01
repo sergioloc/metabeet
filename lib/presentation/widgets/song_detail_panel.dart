@@ -13,11 +13,13 @@ class SongDetailPanel extends StatelessWidget {
     required this.status,
     required this.metadata,
     required this.onClose,
+    this.coverArt,
   });
 
   final MetadataStatus status;
   final AudioMetadataEntity? metadata;
   final VoidCallback onClose;
+  final Uint8List? coverArt;
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +85,10 @@ class SongDetailPanel extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             Center(
-              child: _CoverArt(bytes: meta.coverArt, format: meta.format),
+              child: _CoverArt(
+                bytes: coverArt ?? meta.coverArt,
+                format: meta.format,
+              ),
             ),
             const SizedBox(height: 16),
             Text(

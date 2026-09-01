@@ -24,6 +24,9 @@ class HomeState extends Equatable {
     this.selectedFilePath,
     this.selectedMetadata,
     this.metadataStatus = MetadataStatus.idle,
+    this.precacheProgress,
+    this.precacheTimings,
+    this.selectedCoverArt,
   });
 
   final HomeStatus status;
@@ -41,6 +44,9 @@ class HomeState extends Equatable {
   final String? selectedFilePath;
   final AudioMetadataEntity? selectedMetadata;
   final MetadataStatus metadataStatus;
+  final PrecacheProgress? precacheProgress;
+  final PrecacheTimings? precacheTimings;
+  final Uint8List? selectedCoverArt;
 
   static const Object _unset = Object();
 
@@ -60,6 +66,9 @@ class HomeState extends Equatable {
     String? selectedFilePath,
     AudioMetadataEntity? selectedMetadata,
     MetadataStatus? metadataStatus,
+    Object? precacheProgress = _unset,
+    Object? precacheTimings = _unset,
+    Uint8List? selectedCoverArt,
     Object? clearSelection = _unset,
   }) {
     final shouldClear = identical(clearSelection, true);
@@ -84,6 +93,14 @@ class HomeState extends Equatable {
       metadataStatus: shouldClear
           ? MetadataStatus.idle
           : (metadataStatus ?? this.metadataStatus),
+      precacheProgress: identical(precacheProgress, _unset)
+          ? this.precacheProgress
+          : precacheProgress as PrecacheProgress?,
+      precacheTimings: identical(precacheTimings, _unset)
+          ? this.precacheTimings
+          : precacheTimings as PrecacheTimings?,
+      selectedCoverArt:
+          shouldClear ? null : (selectedCoverArt ?? this.selectedCoverArt),
     );
   }
 
@@ -104,5 +121,8 @@ class HomeState extends Equatable {
         selectedFilePath,
         selectedMetadata,
         metadataStatus,
+        precacheProgress,
+        precacheTimings,
+        selectedCoverArt,
       ];
 }

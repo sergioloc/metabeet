@@ -69,6 +69,11 @@ class FileSelected extends HomeEvent {
   List<Object?> get props => [path];
 }
 
+/// The folder precache is done and the user closed the progress banner.
+class PrecacheDismissed extends HomeEvent {
+  const PrecacheDismissed();
+}
+
 /// The details panel was closed.
 class FileDetailClosed extends HomeEvent {
   const FileDetailClosed();

@@ -1,3 +1,4 @@
+import '../entities/precache_progress.dart';
 import '../repositories/audio_file_repository.dart';
 
 /// Eagerly loads metadata and cover art for every audio file under a folder
@@ -7,5 +8,9 @@ class PrecacheAudioFilesUseCase {
 
   final AudioFileRepository repository;
 
-  Future<void> execute(String path) => repository.precache(path);
+  Future<PrecacheTimings> execute(
+    String path, {
+    void Function(PrecacheProgress progress)? onProgress,
+  }) =>
+      repository.precache(path, onProgress: onProgress);
 }

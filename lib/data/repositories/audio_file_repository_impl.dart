@@ -4,6 +4,7 @@ import '../../domain/entities/audio_file_entity.dart';
 import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
 import '../../domain/entities/metadata_update_request.dart';
+import '../../domain/entities/precache_progress.dart';
 import '../../domain/repositories/audio_file_repository.dart';
 import '../datasource/audio_file_local_datasource.dart';
 
@@ -19,7 +20,11 @@ class AudioFileRepositoryImpl implements AudioFileRepository {
   }
 
   @override
-  Future<void> precache(String path) => localDataSource.precache(path);
+  Future<PrecacheTimings> precache(
+    String path, {
+    void Function(PrecacheProgress progress)? onProgress,
+  }) =>
+      localDataSource.precache(path, onProgress: onProgress);
 
   @override
   Future<Uint8List?> getCoverArt(String path) =>

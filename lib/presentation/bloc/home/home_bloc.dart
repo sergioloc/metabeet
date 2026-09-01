@@ -12,6 +12,7 @@ import '../../../domain/entities/audio_metadata_entity.dart';
 import '../../../domain/entities/file_rename_request.dart';
 import '../../../domain/entities/folder_entity.dart';
 import '../../../domain/entities/metadata_update_request.dart';
+import '../../../domain/entities/precache_progress.dart';
 import '../../../domain/repositories/audio_file_repository.dart';
 import '../../../domain/repositories/folder_repository.dart';
 import '../../../domain/usecases/get_audio_files.dart';
@@ -40,6 +41,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<FileSelected>(_onFileSelected);
     on<FileDetailClosed>(_onFileDetailClosed);
     on<NoticeShown>(_onNoticeShown);
+    on<PrecacheDismissed>(_onPrecacheDismissed);
   }
 
   final FolderRepository _folderRepository = FolderRepositoryImpl(
@@ -88,7 +90,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         audioStatus: AudioStatus.loading,
       ));
 
-      await _precacheAudioFiles.execute(folder.path);
+      final timings = await _precacheAudioFiles.execute(
+        folder.path,
+        onProgress: (progress) {
+          if (isClosed) return;
+          emit(state.copyWith(precacheProgress: progress));
+        },
+      );
 
       final (subfolders, files) = await (
         _getFolderSubfolders.execute(folder.path),
@@ -100,6 +108,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           rootFolders: subfolders,
           audioFiles: files,
           audioStatus: AudioStatus.ready,
+          precacheProgress: PrecacheProgress(
+            phase: PrecachePhase.cover,
+            done: files.length,
+            total: files.length,
+          ),
+          precacheTimings: timings,
         ));
       }
     } catch (error) {
@@ -273,6 +287,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     }
   }
 
+  void _onPrecacheDismissed(PrecacheDismissed event, Emitter<HomeState> emit) {
+    if (state.precacheProgress != null || state.precacheTimings != null) {
+      emit(state.copyWith(
+        precacheProgress: null,
+        precacheTimings: null,
+      ));
+    }
+  }
+
   Future<void> _onFileSelected(
     FileSelected event,
     Emitter<HomeState> emit,
@@ -281,13 +304,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     emit(state.copyWith(
       selectedFilePath: event.path,
       selectedMetadata: null,
+      selectedCoverArt: null,
       metadataStatus: MetadataStatus.loading,
       clearSelection: false,
     ));
-    final metadata = await _getMetadata.execute(event.path);
+    final (metadata, cover) = await (
+      _getMetadata.execute(event.path),
+      _getCoverArt.execute(event.path),
+    ).wait;
     if (!isClosed && state.selectedFilePath == event.path) {
       emit(state.copyWith(
         selectedMetadata: metadata,
+        selectedCoverArt: cover,
         metadataStatus: MetadataStatus.ready,
       ));
     }
