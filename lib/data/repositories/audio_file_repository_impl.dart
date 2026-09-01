@@ -19,6 +19,9 @@ class AudioFileRepositoryImpl implements AudioFileRepository {
   }
 
   @override
+  Future<void> precache(String path) => localDataSource.precache(path);
+
+  @override
   Future<Uint8List?> getCoverArt(String path) =>
       localDataSource.getCoverArt(path);
 

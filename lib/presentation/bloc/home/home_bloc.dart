@@ -19,6 +19,7 @@ import '../../../domain/usecases/get_cover_art.dart';
 import '../../../domain/usecases/get_folder_subfolders.dart';
 import '../../../domain/usecases/get_metadata.dart';
 import '../../../domain/usecases/import_folder.dart';
+import '../../../domain/usecases/precache_audio_files.dart';
 import '../../../domain/usecases/rename_files.dart';
 import '../../../domain/usecases/update_metadata_from_name.dart';
 import '../../../utils/path_utils.dart';
@@ -54,6 +55,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       GetFolderSubfoldersUseCase(_folderRepository);
   late final GetAudioFilesUseCase _getAudioFiles =
       GetAudioFilesUseCase(_audioFileRepository);
+  late final PrecacheAudioFilesUseCase _precacheAudioFiles =
+      PrecacheAudioFilesUseCase(_audioFileRepository);
   late final GetCoverArtUseCase _getCoverArt =
       GetCoverArtUseCase(_audioFileRepository);
   late final RenameFilesUseCase _renameFiles =
@@ -84,6 +87,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         selectedFolder: folder,
         audioStatus: AudioStatus.loading,
       ));
+
+      await _precacheAudioFiles.execute(folder.path);
 
       final (subfolders, files) = await (
         _getFolderSubfolders.execute(folder.path),

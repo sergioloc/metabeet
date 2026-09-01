@@ -17,6 +17,10 @@ import '../model/audio_file_model.dart';
 abstract class AudioFileLocalDataSource {
   Future<List<AudioFileModel>> getAudioFiles(String path);
 
+  /// Eagerly loads metadata and cover art for every audio file under [path]
+  /// into memory, so later calls to [getMetadata]/[getCoverArt] are instant.
+  Future<void> precache(String path);
+
   Future<Uint8List?> getCoverArt(String path);
 
   Future<AudioMetadataEntity?> getMetadata(String path);
@@ -26,18 +30,19 @@ abstract class AudioFileLocalDataSource {
   Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests);
 }
 
-/// Reads cover art off the UI thread and caches recent results.
+/// Reads audio files and their cover art off the UI thread, caching every
+/// result in memory. Once a folder has been [precache]d, reads are served
+/// straight from the cache.
 class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   AudioFileLocalDataSourceImpl({int maxConcurrentReads = 4})
       : _maxConcurrentReads = maxConcurrentReads;
 
   final int _maxConcurrentReads;
 
-  final Map<String, Future<Uint8List?>> _cache = <String, Future<Uint8List?>>{};
-  final List<Future<void> Function()> _queue = [];
-  int _activeReads = 0;
-
-  static const int _maxCacheEntries = 300;
+  final Map<String, AudioMetadataEntity?> _metadataCache = {};
+  final Map<String, Uint8List?> _coverArtCache = {};
+  final Map<String, Future<AudioMetadataEntity?>> _metadataInFlight = {};
+  final Map<String, Future<Uint8List?>> _coverArtInFlight = {};
 
   @override
   Future<List<AudioFileModel>> getAudioFiles(String path) async {
@@ -63,36 +68,66 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   }
 
   @override
-  Future<Uint8List?> getCoverArt(String path) {
-    final cached = _cache.remove(path);
-    if (cached != null) {
-      _cache[path] = cached;
-      return cached;
+  Future<void> precache(String path) async {
+    final files = await getAudioFiles(path);
+    final paths = files.map((f) => f.path).toList();
+
+    var index = 0;
+    Future<void> worker() async {
+      while (true) {
+        final current = index++;
+        if (current >= paths.length) return;
+        await getMetadata(paths[current]);
+      }
     }
 
-    final future = _enqueueRead(path);
-    _cache[path] = future;
-    while (_cache.length > _maxCacheEntries) {
-      _cache.remove(_cache.keys.first);
-    }
-    return future;
+    final count =
+        _maxConcurrentReads < paths.length ? _maxConcurrentReads : paths.length;
+    await Future.wait([for (var i = 0; i < count; i++) worker()]);
   }
 
-  Future<Uint8List?> _enqueueRead(String path) {
+  @override
+  Future<Uint8List?> getCoverArt(String path) async {
+    if (_coverArtCache.containsKey(path)) {
+      return _coverArtCache[path];
+    }
+    final metadata = _metadataCache[path];
+    if (metadata != null) return metadata.coverArt;
+
+    final inFlight = _coverArtInFlight[path];
+    if (inFlight != null) return inFlight;
+
+    final future = _enqueueCoverRead(path);
+    _coverArtInFlight[path] = future;
+    try {
+      final bytes = await future;
+      _coverArtCache[path] = bytes;
+      return bytes;
+    } finally {
+      _coverArtInFlight.remove(path);
+    }
+  }
+
+  Future<Uint8List?> _enqueueCoverRead(String path) {
     final completer = Completer<Uint8List?>();
-    _queue.add(() {
-      return _readCoverArtInIsolate(path).then(
-        (bytes) => completer.complete(bytes),
-        onError: (_) => completer.complete(null),
-      );
-    });
-    _pumpQueue();
+    _enqueueRead(() => _readCoverArtInIsolate(path).then(
+          (bytes) => completer.complete(bytes),
+          onError: (_) => completer.complete(null),
+        ));
     return completer.future;
   }
 
+  void _enqueueRead(Future<void> Function() task) {
+    _pendingReads.add(task);
+    _pumpQueue();
+  }
+
+  final List<Future<void> Function()> _pendingReads = [];
+  int _activeReads = 0;
+
   void _pumpQueue() {
-    while (_activeReads < _maxConcurrentReads && _queue.isNotEmpty) {
-      final task = _queue.removeAt(0);
+    while (_activeReads < _maxConcurrentReads && _pendingReads.isNotEmpty) {
+      final task = _pendingReads.removeAt(0);
       _activeReads++;
       task().whenComplete(() {
         _activeReads--;
@@ -115,8 +150,26 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
 
   @override
   Future<AudioMetadataEntity?> getMetadata(String path) async {
+    if (_metadataCache.containsKey(path)) return _metadataCache[path];
+
+    final inFlight = _metadataInFlight[path];
+    if (inFlight != null) return inFlight;
+
+    final future = _readMetadata(path);
+    _metadataInFlight[path] = future;
+    try {
+      final result = await future;
+      _metadataCache[path] = result;
+      _coverArtCache[path] = result?.coverArt;
+      return result;
+    } finally {
+      _metadataInFlight.remove(path);
+    }
+  }
+
+  Future<AudioMetadataEntity?> _readMetadata(String path) {
     final format = AudioFormat.fromPath(path);
-    if (format == null) return null;
+    if (format == null) return Future.value(null);
     return Isolate.run(() {
       try {
         final metadata = readMetadata(File(path), getImage: true);
@@ -193,6 +246,13 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
       }
       rethrow;
     }
+
+    for (final r in done) {
+      _metadataCache.remove(r.oldPath);
+      _metadataCache.remove(r.newPath);
+      _coverArtCache.remove(r.oldPath);
+      _coverArtCache.remove(r.newPath);
+    }
   }
 
   @override
@@ -214,6 +274,11 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
         });
       }
     });
+
+    for (final request in requests) {
+      _metadataCache.remove(request.path);
+      _coverArtCache.remove(request.path);
+    }
   }
 }
 

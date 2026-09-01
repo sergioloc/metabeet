@@ -8,6 +8,10 @@ import '../entities/metadata_update_request.dart';
 abstract class AudioFileRepository {
   Future<List<AudioFileEntity>> getAudioFiles(String path);
 
+  /// Eagerly loads metadata and cover art for every audio file under [path]
+  /// into memory, so later reads are served from the cache.
+  Future<void> precache(String path);
+
   Future<Uint8List?> getCoverArt(String path);
 
   Future<AudioMetadataEntity?> getMetadata(String path);
