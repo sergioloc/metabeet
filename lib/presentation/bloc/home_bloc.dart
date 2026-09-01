@@ -7,12 +7,14 @@ import '../../domain/entities/audio_file_entity.dart';
 import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
 import '../../domain/entities/folder_entity.dart';
+import '../../domain/entities/metadata_update_request.dart';
 import '../../domain/usecases/get_audio_files.dart';
 import '../../domain/usecases/get_cover_art.dart';
 import '../../domain/usecases/get_folder_subfolders.dart';
 import '../../domain/usecases/get_metadata.dart';
 import '../../domain/usecases/import_folder.dart';
 import '../../domain/usecases/rename_files.dart';
+import '../../domain/usecases/update_metadata_from_name.dart';
 import '../../util/path_utils.dart';
 
 enum HomeStatus { initial, loading, ready, error }
@@ -31,6 +33,7 @@ class HomeState extends Equatable {
     this.audioFiles = const [],
     this.audioError,
     this.pendingRenames = const {},
+    this.pendingMetadataUpdates = const {},
     this.isSaving = false,
     this.notice,
     this.selectedFilePath,
@@ -46,6 +49,7 @@ class HomeState extends Equatable {
   final List<AudioFileEntity> audioFiles;
   final String? audioError;
   final Map<String, String> pendingRenames;
+  final Map<String, MetadataUpdateRequest> pendingMetadataUpdates;
   final bool isSaving;
   final String? notice;
   final String? selectedFilePath;
@@ -63,6 +67,7 @@ class HomeState extends Equatable {
     List<AudioFileEntity>? audioFiles,
     String? audioError,
     Map<String, String>? pendingRenames,
+    Map<String, MetadataUpdateRequest>? pendingMetadataUpdates,
     bool? isSaving,
     Object? notice = _unset,
     String? selectedFilePath,
@@ -80,6 +85,8 @@ class HomeState extends Equatable {
       audioFiles: audioFiles ?? this.audioFiles,
       audioError: audioError ?? this.audioError,
       pendingRenames: pendingRenames ?? this.pendingRenames,
+      pendingMetadataUpdates:
+          pendingMetadataUpdates ?? this.pendingMetadataUpdates,
       isSaving: isSaving ?? this.isSaving,
       notice: identical(notice, _unset) ? this.notice : notice as String?,
       selectedFilePath: shouldClear
@@ -104,6 +111,7 @@ class HomeState extends Equatable {
         audioFiles,
         audioError,
         pendingRenames,
+        pendingMetadataUpdates,
         isSaving,
         notice,
         selectedFilePath,
@@ -151,6 +159,15 @@ class RenameFileRequested extends HomeEvent {
   List<Object?> get props => [path, newName];
 }
 
+class SyncMetadataFromName extends HomeEvent {
+  const SyncMetadataFromName(this.path);
+
+  final String path;
+
+  @override
+  List<Object?> get props => [path];
+}
+
 class SavePendingRenames extends HomeEvent {
   const SavePendingRenames();
 }
@@ -180,11 +197,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     required this.getCoverArt,
     required this.renameFiles,
     required this.getMetadata,
+    required this.updateMetadataFromName,
   }) : super(const HomeState()) {
     on<ImportFolderPressed>(_onImportFolderPressed);
     on<FolderSelected>(_onFolderSelected);
     on<SwapRequested>(_onSwapRequested);
     on<RenameFileRequested>(_onRenameFileRequested);
+    on<SyncMetadataFromName>(_onSyncMetadataFromName);
     on<SavePendingRenames>(_onSavePendingRenames);
     on<FileSelected>(_onFileSelected);
     on<FileDetailClosed>(_onFileDetailClosed);
@@ -197,6 +216,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final GetCoverArtUseCase getCoverArt;
   final RenameFilesUseCase renameFiles;
   final GetMetadataUseCase getMetadata;
+  final UpdateMetadataFromNameUseCase updateMetadataFromName;
 
   Future<void> _onImportFolderPressed(
     ImportFolderPressed event,
@@ -300,24 +320,58 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     emit(state.copyWith(pendingRenames: pending));
   }
 
+  void _onSyncMetadataFromName(
+    SyncMetadataFromName event,
+    Emitter<HomeState> emit,
+  ) {
+    final parts = splitTitleArtist(event.path);
+    if (parts == null) {
+      emit(state.copyWith(notice: 'File name must follow "Title - Artist"'));
+      return;
+    }
+    final pending = Map<String, MetadataUpdateRequest>.of(
+      state.pendingMetadataUpdates,
+    );
+    final existing = pending[event.path];
+    if (existing != null &&
+        existing.title == parts.title &&
+        existing.artist == parts.artist) {
+      pending.remove(event.path);
+    } else {
+      pending[event.path] = MetadataUpdateRequest(
+        path: event.path,
+        title: parts.title,
+        artist: parts.artist,
+      );
+    }
+    emit(state.copyWith(pendingMetadataUpdates: pending));
+  }
+
   Future<void> _onSavePendingRenames(
     SavePendingRenames event,
     Emitter<HomeState> emit,
   ) async {
     final pending = state.pendingRenames;
-    if (pending.isEmpty || state.isSaving) return;
+    final pendingMetadata = state.pendingMetadataUpdates;
+    if ((pending.isEmpty && pendingMetadata.isEmpty) || state.isSaving) return;
 
     emit(state.copyWith(isSaving: true));
     try {
-      await renameFiles([
-        for (final entry in pending.entries)
-          FileRenameRequest(oldPath: entry.key, newPath: entry.value),
-      ]);
+      if (pendingMetadata.isNotEmpty) {
+        await updateMetadataFromName(pendingMetadata.values.toList());
+      }
+      if (pending.isNotEmpty) {
+        await renameFiles([
+          for (final entry in pending.entries)
+            FileRenameRequest(oldPath: entry.key, newPath: entry.value),
+        ]);
+      }
 
       final folder = state.selectedFolder;
       if (folder == null) {
         emit(state.copyWith(
           pendingRenames: const {},
+          pendingMetadataUpdates: const {},
           isSaving: false,
           notice: 'Changes saved',
         ));
@@ -326,6 +380,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       emit(state.copyWith(
         pendingRenames: const {},
+        pendingMetadataUpdates: const {},
         isSaving: false,
         audioStatus: AudioStatus.loading,
         audioFiles: const [],

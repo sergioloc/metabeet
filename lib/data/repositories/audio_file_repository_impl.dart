@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../../domain/entities/audio_file_entity.dart';
 import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
+import '../../domain/entities/metadata_update_request.dart';
 import '../../domain/repositories/audio_file_repository.dart';
 import '../datasource/audio_file_local_datasource.dart';
 
@@ -28,4 +29,8 @@ class AudioFileRepositoryImpl implements AudioFileRepository {
   @override
   Future<void> renameFiles(List<FileRenameRequest> requests) =>
       localDataSource.renameFiles(requests);
+
+  @override
+  Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests) =>
+      localDataSource.updateMetadataFromFiles(requests);
 }

@@ -13,6 +13,7 @@ import 'domain/usecases/get_folder_subfolders.dart';
 import 'domain/usecases/get_metadata.dart';
 import 'domain/usecases/import_folder.dart';
 import 'domain/usecases/rename_files.dart';
+import 'domain/usecases/update_metadata_from_name.dart';
 import 'presentation/bloc/home_bloc.dart';
 import 'presentation/pages/home_page.dart';
 import 'util/app_colors.dart';
@@ -31,6 +32,7 @@ void main() {
     getCoverArt: GetCoverArtUseCase(audioFileRepository),
     renameFiles: RenameFilesUseCase(audioFileRepository),
     getMetadata: GetMetadataUseCase(audioFileRepository),
+    updateMetadataFromName: UpdateMetadataFromNameUseCase(audioFileRepository),
   );
 
   runApp(MetabeetApp(bloc: homeBloc));

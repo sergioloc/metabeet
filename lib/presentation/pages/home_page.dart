@@ -34,12 +34,15 @@ class HomePage extends StatelessWidget {
                   : () => context
                       .read<HomeBloc>()
                       .add(const ImportFolderPressed()),
-              onSavePressed: state.pendingRenames.isEmpty || state.isSaving
-                  ? null
-                  : () => context
-                      .read<HomeBloc>()
-                      .add(const SavePendingRenames()),
-              saveCount: state.pendingRenames.length,
+onSavePressed: (state.pendingRenames.isEmpty &&
+              state.pendingMetadataUpdates.isEmpty) ||
+              state.isSaving
+              ? null
+              : () => context
+                  .read<HomeBloc>()
+                  .add(const SavePendingRenames()),
+              saveCount:
+                  state.pendingRenames.length + state.pendingMetadataUpdates.length,
             ),
             body: switch (state.status) {
               HomeStatus.initial => const _EmptyState(),
@@ -74,9 +77,12 @@ class HomePage extends StatelessWidget {
       loadCoverArt: (path) => context.read<HomeBloc>().loadCoverArt(path),
       loadMetadata: (path) => context.read<HomeBloc>().loadMetadata(path),
       pendingRenames: state.pendingRenames,
+      pendingMetadataUpdates: state.pendingMetadataUpdates,
       onSwap: (path) => context.read<HomeBloc>().add(SwapRequested(path)),
       onRename: (path, newName) =>
           context.read<HomeBloc>().add(RenameFileRequested(path, newName)),
+      onSyncFromName: (path) =>
+          context.read<HomeBloc>().add(SyncMetadataFromName(path)),
       onFileSelected: (path) =>
           context.read<HomeBloc>().add(FileSelected(path)),
       error: state.audioError,

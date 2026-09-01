@@ -8,6 +8,7 @@ import 'package:metabeet/domain/entities/audio_file_entity.dart';
 import 'package:metabeet/domain/entities/audio_metadata_entity.dart';
 import 'package:metabeet/domain/entities/file_rename_request.dart';
 import 'package:metabeet/domain/entities/folder_entity.dart';
+import 'package:metabeet/domain/entities/metadata_update_request.dart';
 import 'package:metabeet/domain/repositories/audio_file_repository.dart';
 import 'package:metabeet/domain/repositories/folder_repository.dart';
 import 'package:metabeet/domain/usecases/get_audio_files.dart';
@@ -16,6 +17,7 @@ import 'package:metabeet/domain/usecases/get_folder_subfolders.dart';
 import 'package:metabeet/domain/usecases/get_metadata.dart';
 import 'package:metabeet/domain/usecases/import_folder.dart';
 import 'package:metabeet/domain/usecases/rename_files.dart';
+import 'package:metabeet/domain/usecases/update_metadata_from_name.dart';
 import 'package:metabeet/main.dart';
 import 'package:metabeet/presentation/bloc/home_bloc.dart';
 
@@ -67,6 +69,11 @@ class _FakeAudioFileRepository implements AudioFileRepository {
 
   @override
   Future<void> renameFiles(List<FileRenameRequest> requests) async {}
+
+  @override
+  Future<void> updateMetadataFromFiles(
+    List<MetadataUpdateRequest> requests,
+  ) async {}
 }
 
 /// PNG transparente de 1x1.
@@ -302,5 +309,6 @@ HomeBloc _buildBloc(
     getCoverArt: GetCoverArtUseCase(audioFileRepository),
     renameFiles: RenameFilesUseCase(audioFileRepository),
     getMetadata: GetMetadataUseCase(audioFileRepository),
+    updateMetadataFromName: UpdateMetadataFromNameUseCase(audioFileRepository),
   );
 }

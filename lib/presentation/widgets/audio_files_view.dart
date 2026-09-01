@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../domain/enum/audio_format.dart';
 import '../../domain/entities/audio_file_entity.dart';
 import '../../domain/entities/audio_metadata_entity.dart';
+import '../../domain/entities/metadata_update_request.dart';
 import '../../util/app_colors.dart';
 import '../../util/path_utils.dart';
 import '../bloc/home_bloc.dart';
@@ -19,8 +20,10 @@ class AudioFilesView extends StatefulWidget {
     required this.loadCoverArt,
     required this.loadMetadata,
     required this.pendingRenames,
+    required this.pendingMetadataUpdates,
     required this.onSwap,
     this.onRename,
+    this.onSyncFromName,
     this.onFileSelected,
     this.error,
     this.onRetry,
@@ -32,8 +35,10 @@ class AudioFilesView extends StatefulWidget {
   final Future<Uint8List?> Function(String path) loadCoverArt;
   final Future<AudioMetadataEntity?> Function(String path) loadMetadata;
   final Map<String, String> pendingRenames;
+  final Map<String, MetadataUpdateRequest> pendingMetadataUpdates;
   final void Function(String path) onSwap;
   final void Function(String path, String newName)? onRename;
+  final void Function(String path)? onSyncFromName;
   final void Function(String path)? onFileSelected;
   final String? error;
   final VoidCallback? onRetry;
@@ -234,6 +239,8 @@ itemBuilder: (context, index) {
                 nameWithoutExtension(widget.pendingRenames[file.path] ?? file.path);
             final hasSingleDash = displayName.split('-').length - 1 == 1;
             final isPendingSwap = widget.pendingRenames.containsKey(file.path);
+            final isPendingSync =
+                widget.pendingMetadataUpdates.containsKey(file.path);
             return GestureDetector(
               onSecondaryTapDown: (details) {
                 _showContextMenu(
@@ -314,6 +321,24 @@ itemBuilder: (context, index) {
                           minHeight: 24,
                         ),
                       ),
+                      if (widget.onSyncFromName != null && hasSingleDash)
+                        IconButton(
+                          onPressed: widget.onSyncFromName == null
+                              ? null
+                              : () => widget.onSyncFromName!(file.path),
+                          icon: const Icon(Icons.sync, size: 18),
+                          tooltip: isPendingSync
+                              ? 'Undo metadata update'
+                              : 'Update metadata from file name',
+                          color: isPendingSync
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 24,
+                          ),
+                        ),
                   ],
                 ),
               ),

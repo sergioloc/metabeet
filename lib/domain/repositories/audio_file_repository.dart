@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../entities/audio_file_entity.dart';
 import '../entities/audio_metadata_entity.dart';
 import '../entities/file_rename_request.dart';
+import '../entities/metadata_update_request.dart';
 
 abstract class AudioFileRepository {
   Future<List<AudioFileEntity>> getAudioFiles(String path);
@@ -12,4 +13,6 @@ abstract class AudioFileRepository {
   Future<AudioMetadataEntity?> getMetadata(String path);
 
   Future<void> renameFiles(List<FileRenameRequest> requests);
+
+  Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests);
 }

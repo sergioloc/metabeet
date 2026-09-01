@@ -8,6 +8,7 @@ import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 
 import '../../domain/entities/audio_metadata_entity.dart';
 import '../../domain/entities/file_rename_request.dart';
+import '../../domain/entities/metadata_update_request.dart';
 import '../../domain/enum/audio_format.dart';
 import '../../util/path_utils.dart';
 import '../model/audio_file_model.dart';
@@ -21,9 +22,9 @@ abstract class AudioFileLocalDataSource {
   Future<AudioMetadataEntity?> getMetadata(String path);
 
   Future<void> renameFiles(List<FileRenameRequest> requests);
-}
 
-/// Reads cover art off the UI thread and caches recent results.
+  Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests);
+}/// Reads cover art off the UI thread and caches recent results.
 class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
   AudioFileLocalDataSourceImpl({int maxConcurrentReads = 4})
       : _maxConcurrentReads = maxConcurrentReads;
@@ -191,7 +192,35 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
       rethrow;
     }
   }
+
+  @override
+  Future<void> updateMetadataFromFiles(
+    List<MetadataUpdateRequest> requests,
+  ) async {
+    await Isolate.run(() {
+      for (final request in requests) {
+        final format = AudioFormat.fromPath(request.path);
+        if (format == null || !_isWritable(format)) {
+          throw StateError(
+            'Metadata writing is not supported for ${request.path}',
+          );
+        }
+        updateMetadata(File(request.path), (metadata) {
+          metadata
+            ..setTitle(request.title)
+            ..setArtist(request.artist);
+        });
+      }
+    });
+  }
 }
+
+/// Whether [format] supports writing metadata via `updateMetadata`.
+bool _isWritable(AudioFormat format) =>
+    format == AudioFormat.mp3 ||
+    format == AudioFormat.flac ||
+    format == AudioFormat.wav ||
+    format == AudioFormat.m4a;
 
 /// Resolves the artist to use for a file.
 ///
