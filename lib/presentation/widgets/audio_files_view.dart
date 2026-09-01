@@ -47,10 +47,14 @@ class AudioFilesView extends StatefulWidget {
   State<AudioFilesView> createState() => _AudioFilesViewState();
 }
 
+enum _Filter { all, mismatch, noPattern }
+
 class _AudioFilesViewState extends State<AudioFilesView> {
   final TextEditingController _searchController = TextEditingController();
   final Map<String, _SyncState> _syncStates = {};
   String _query = '';
+  _Filter _selectedFilter = _Filter.all;
+  int _syncLoadGeneration = 0;
 
   @override
   void initState() {
@@ -58,20 +62,49 @@ class _AudioFilesViewState extends State<AudioFilesView> {
     _searchController.addListener(() {
       setState(() => _query = _searchController.text);
     });
+    _loadSyncStates();
   }
 
-  void _onSyncStateChanged(String path, _SyncState state) {
-    if (_syncStates[path] == state) return;
-    setState(() => _syncStates[path] = state);
+  Future<void> _loadSyncStates() async {
+    final generation = ++_syncLoadGeneration;
+    final files = widget.files;
+    _syncStates
+      ..clear()
+      ..addEntries(files.map((f) => MapEntry(f.path, _SyncState.pending)));
+    if (mounted) setState(() {});
+
+    const limit = 32;
+    var index = 0;
+    Future<void> worker() async {
+      while (mounted && generation == _syncLoadGeneration) {
+        final current = index++;
+        if (current >= files.length) return;
+        final file = files[current];
+        AudioMetadataEntity? metadata;
+        try {
+          metadata = await widget.loadMetadata(file.path);
+        } catch (_) {
+          metadata = null;
+        }
+        if (!mounted || generation != _syncLoadGeneration) return;
+        _syncStates[file.path] = _computeSync(file.path, metadata);
+        setState(() {});
+      }
+    }
+
+    await Future.wait([
+      for (var i = 0; i < limit && i < files.length; i++) worker(),
+    ]);
   }
 
   @override
   void didUpdateWidget(AudioFilesView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.folderName != widget.folderName) {
+    if (oldWidget.files != widget.files) {
       _searchController.clear();
       _query = '';
-      _syncStates.clear();
+      _selectedFilter = _Filter.all;
+      _loadSyncStates();
     }
   }
 
@@ -83,11 +116,25 @@ class _AudioFilesViewState extends State<AudioFilesView> {
 
   List<AudioFileEntity> get _displayFiles {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return widget.files;
-    return widget.files.where((file) {
-      return nameWithoutExtension(file.path).toLowerCase().contains(q) ||
-          extensionFromPath(file.path).toLowerCase().contains(q);
-    }).toList();
+    final bySearch = q.isEmpty
+        ? widget.files
+        : widget.files.where((file) {
+            return nameWithoutExtension(file.path).toLowerCase().contains(q) ||
+                extensionFromPath(file.path).toLowerCase().contains(q);
+          }).toList();
+
+    switch (_selectedFilter) {
+      case _Filter.all:
+        return bySearch;
+      case _Filter.mismatch:
+        return bySearch
+            .where((f) => _syncStates[f.path] == _SyncState.mismatch)
+            .toList();
+      case _Filter.noPattern:
+        return bySearch
+            .where((f) => _syncStates[f.path] == _SyncState.noPattern)
+            .toList();
+    }
   }
 
   @override
@@ -168,7 +215,27 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                 ),
               ),
             ),
-          const Divider(height: 1),
+          if (widget.status == AudioStatus.ready) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final filter in _Filter.values)
+                    ChoiceChip(
+                      label: Text(_filterLabel(filter)),
+                      selected: _selectedFilter == filter,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = selected ? filter : _Filter.all;
+                        });
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+          ],
           Expanded(child: _buildContent(context, displayFiles)),
         ],
       ),
@@ -299,9 +366,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                     ),
                     const SizedBox(width: 8),
                     _SyncBadge(
-                      filePath: file.path,
-                      loadMetadata: widget.loadMetadata,
-                      onStateChanged: _onSyncStateChanged,
+                      state: _syncStates[file.path] ?? _SyncState.pending,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -431,6 +496,17 @@ class _AudioFilesViewState extends State<AudioFilesView> {
   }
 
   String _fileCountLabel(int count) => count == 1 ? '1 file' : '$count files';
+
+  String _filterLabel(_Filter filter) {
+    switch (filter) {
+      case _Filter.all:
+        return 'All';
+      case _Filter.mismatch:
+        return 'Mismatches';
+      case _Filter.noPattern:
+        return 'Wrong format';
+    }
+  }
 }
 
 /// Shows the track's embedded cover art, or a music icon as fallback.
@@ -510,53 +586,32 @@ class _TrackArtworkState extends State<_TrackArtwork> {
   }
 }
 
-/// Shows whether the file's metadata title and artist match the
-/// "Title - Artist" file name. Loads metadata lazily.
-class _SyncBadge extends StatefulWidget {
-  const _SyncBadge({
-    required this.filePath,
-    required this.loadMetadata,
-    this.onStateChanged,
-  });
-
-  final String filePath;
-  final Future<AudioMetadataEntity?> Function(String path) loadMetadata;
-  final void Function(String path, _SyncState state)? onStateChanged;
-
-  @override
-  State<_SyncBadge> createState() => _SyncBadgeState();
-}
-
 enum _SyncState { pending, synced, mismatch, noPattern }
 
-class _SyncBadgeState extends State<_SyncBadge> {
-  _SyncState _state = _SyncState.pending;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
+_SyncState _computeSync(String filePath, AudioMetadataEntity? metadata) {
+  final parts = splitTitleArtist(filePath);
+  if (parts == null || metadata == null) return _SyncState.noPattern;
+  final title = metadata.title?.trim().toLowerCase();
+  final artist = metadata.artist?.trim().toLowerCase();
+  if (title == null || artist == null) return _SyncState.mismatch;
+  if (title == parts.title.toLowerCase() &&
+      artist == parts.artist.toLowerCase()) {
+    return _SyncState.synced;
   }
+  return _SyncState.mismatch;
+}
 
-  Future<void> _load() async {
-    AudioMetadataEntity? metadata;
-    try {
-      metadata = await widget.loadMetadata(widget.filePath);
-    } catch (_) {
-      metadata = null;
-    }
-    if (!mounted) return;
-    final state = _computeSync(widget.filePath, metadata);
-    setState(() {
-      _state = state;
-    });
-    widget.onStateChanged?.call(widget.filePath, state);
-  }
+/// Shows whether the file's metadata title and artist match the
+/// "Title - Artist" file name. Loads metadata lazily.
+class _SyncBadge extends StatelessWidget {
+  const _SyncBadge({required this.state});
+
+  final _SyncState state;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    switch (_state) {
+    switch (state) {
       case _SyncState.pending:
         return Icon(
           Icons.circle,
@@ -592,26 +647,6 @@ class _SyncBadgeState extends State<_SyncBadge> {
         );
     }
   }
-}
-
-_SyncState _computeSync(
-  String filePath,
-  AudioMetadataEntity? metadata,
-) {
-  final parts = splitTitleArtist(filePath);
-  if (parts == null || metadata == null) {
-    return _SyncState.noPattern;
-  }
-  final title = metadata.title?.trim().toLowerCase();
-  final artist = metadata.artist?.trim().toLowerCase();
-  if (title == null || artist == null) {
-    return _SyncState.mismatch;
-  }
-  if (title == parts.title.toLowerCase() &&
-      artist == parts.artist.toLowerCase()) {
-    return _SyncState.synced;
-  }
-  return _SyncState.mismatch;
 }
 
 MaterialColor _extensionColor(AudioFormat format) {
