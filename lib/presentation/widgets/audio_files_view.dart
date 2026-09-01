@@ -144,24 +144,22 @@ class _AudioFilesViewState extends State<AudioFilesView> {
     final displayFiles = _displayFiles;
 
     return Material(
-      color: colorScheme.surfaceContainerLowest,
+      color: colorScheme.surfaceContainerLow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                Icon(Icons.library_music_outlined, color: colorScheme.primary),
-                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Songs',
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       Text(
@@ -177,64 +175,39 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                 ),
                 if (widget.status == AudioStatus.ready) ...[
                   const SizedBox(width: 8),
-                  Text(
-                    _fileCountLabel(displayFiles.length),
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                  _FileCountBadge(count: _displayFiles.length),
                 ],
               ],
             ),
           ),
-          if (widget.status == AudioStatus.ready)
+          if (widget.status == AudioStatus.ready) ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Search songs…',
-                  prefixIcon: const Icon(Icons.search, size: 20),
+                  prefixIcon: const Icon(Icons.search, size: 19),
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
+                          icon: const Icon(Icons.close_rounded, size: 18),
                           tooltip: 'Clear search',
                           onPressed: _searchController.clear,
                         ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.6,
-                  ),
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
                 ),
               ),
             ),
-          if (widget.status == AudioStatus.ready) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  for (final filter in _Filter.values)
-                    ChoiceChip(
-                      label: Text(_filterLabel(filter)),
-                      selected: _selectedFilter == filter,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilter = selected ? filter : _Filter.all;
-                        });
-                      },
-                    ),
-                ],
+              child: _FilterBar(
+                selected: _selectedFilter,
+                onSelected: (filter) {
+                  setState(() => _selectedFilter = filter);
+                },
               ),
             ),
-            const Divider(height: 1),
+            const Divider(),
           ],
           Expanded(child: _buildContent(context, displayFiles)),
         ],
@@ -285,137 +258,45 @@ class _AudioFilesViewState extends State<AudioFilesView> {
         );
       case AudioStatus.ready:
         if (widget.files.isEmpty) {
-          return Center(
-            child: Text(
-              'No audio files in this folder',
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
+          return _EmptyListMessage(
+            icon: Icons.library_music_outlined,
+            message: 'No audio files in this folder',
           );
         }
         if (files.isEmpty) {
-          return Center(
-            child: Text(
-              'No results found',
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
+          return _EmptyListMessage(
+            icon: Icons.search_off_rounded,
+            message: 'No results found',
           );
         }
-        return ListView.separated(
+        return ListView.builder(
+          padding: const EdgeInsets.all(8),
           itemCount: files.length,
-          separatorBuilder: (context, index) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final file = files[index];
-            final displayName = nameWithoutExtension(
-                widget.pendingRenames[file.path] ?? file.path);
-            final hasSingleDash = displayName.split('-').length - 1 == 1;
-            final isPendingSwap = widget.pendingRenames.containsKey(file.path);
-            final isPendingSync =
-                widget.pendingMetadataUpdates.containsKey(file.path);
-            final syncState = _syncStates[file.path];
-            return GestureDetector(
-              onSecondaryTapDown: (details) {
-                _showContextMenu(
-                  context,
-                  details,
-                  file.path,
-                  nameWithoutExtension(file.path),
-                );
-              },
-              child: ListTile(
-                dense: true,
-                onTap: widget.onFileSelected == null
-                    ? null
-                    : () => widget.onFileSelected!(file.path),
-                leading: _TrackArtwork(
-                  path: file.path,
-                  loadCoverArt: widget.loadCoverArt,
-                ),
-                title: Row(
-                  children: [
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 48,
-                      height: 20,
-                      child: Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color:
-                              _chipColor(file.format).withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: _chipColor(file.format).withValues(
-                              alpha: 0.35,
-                            ),
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          extensionFromPath(file.path),
-                          maxLines: 1,
-                          overflow: TextOverflow.clip,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: _extensionTextColor(context, file.format),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _SyncBadge(
-                      state: _syncStates[file.path] ?? _SyncState.pending,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: isPendingSwap
-                            ? TextStyle(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                              )
-                            : null,
-                      ),
-                    ),
-                    if (widget.onSyncFromName != null &&
-                        syncState == _SyncState.mismatch)
-                      IconButton(
-                        onPressed: () => widget.onSyncFromName!(file.path),
-                        icon: const Icon(Icons.sync, size: 18),
-                        tooltip: isPendingSync
-                            ? 'Undo metadata update'
-                            : 'Update metadata from file name',
-                        color: isPendingSync
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 24,
-                        ),
-                      ),
-                    if (hasSingleDash)
-                      IconButton(
-                        onPressed: () => widget.onSwap(file.path),
-                        icon: const Icon(Icons.swap_horiz, size: 18),
-                        tooltip: isPendingSwap ? 'Undo' : 'Swap',
-                        color: isPendingSwap
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 24,
-                        ),
-                      ),
-                  ],
-                ),
+            return _TrackTile(
+              file: file,
+              displayName: nameWithoutExtension(
+                  widget.pendingRenames[file.path] ?? file.path),
+              syncState: _syncStates[file.path] ?? _SyncState.pending,
+              isPendingSwap: widget.pendingRenames.containsKey(file.path),
+              isPendingSync:
+                  widget.pendingMetadataUpdates.containsKey(file.path),
+              loadCoverArt: widget.loadCoverArt,
+              onTapReplace: widget.onFileSelected == null
+                  ? null
+                  : () => widget.onFileSelected!(file.path),
+              onSecondaryTap: (details) => _showContextMenu(
+                context,
+                details,
+                file.path,
+                nameWithoutExtension(file.path),
               ),
+              onSync: widget.onSyncFromName != null &&
+                      (_syncStates[file.path] == _SyncState.mismatch)
+                  ? () => widget.onSyncFromName!(file.path)
+                  : null,
+              onSwap: () => widget.onSwap(file.path),
             );
           },
         );
@@ -494,10 +375,70 @@ class _AudioFilesViewState extends State<AudioFilesView> {
     if (newName.isEmpty || newName == currentName) return;
     widget.onRename!(path, newName);
   }
+}
 
-  String _fileCountLabel(int count) => count == 1 ? '1 file' : '$count files';
+class _FileCountBadge extends StatelessWidget {
+  const _FileCountBadge({required this.count});
 
-  String _filterLabel(_Filter filter) {
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final label = count == 1 ? '1 file' : '$count files';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+    );
+  }
+}
+
+/// Windows 11 style filter: segmented pills inside a rounded container.
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({required this.selected, required this.onSelected});
+
+  final _Filter selected;
+  final ValueChanged<_Filter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < _Filter.values.length; i++)
+            _FilterPill(
+              label: _label(_Filter.values[i]),
+              selected: selected == _Filter.values[i],
+              margin: EdgeInsets.only(left: i == 0 ? 0 : 3),
+              onTap: () => onSelected(_Filter.values[i]),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _label(_Filter filter) {
     switch (filter) {
       case _Filter.all:
         return 'All';
@@ -506,6 +447,258 @@ class _AudioFilesViewState extends State<AudioFilesView> {
       case _Filter.noPattern:
         return 'Wrong format';
     }
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.margin,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final EdgeInsets margin;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? colorScheme.surfaceContainerLow : Colors.transparent,
+      borderRadius: BorderRadius.circular(4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          margin: margin,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: selected
+              ? BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 2,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                )
+              : null,
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: selected
+                      ? colorScheme.onSurface
+                      : colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyListMessage extends StatelessWidget {
+  const _EmptyListMessage({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 40, color: colorScheme.outlineVariant),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A single track row with cover art, format chip, sync badge and actions.
+class _TrackTile extends StatefulWidget {
+  const _TrackTile({
+    required this.file,
+    required this.displayName,
+    required this.syncState,
+    required this.isPendingSwap,
+    required this.isPendingSync,
+    required this.loadCoverArt,
+    required this.onTapReplace,
+    required this.onSecondaryTap,
+    required this.onSync,
+    required this.onSwap,
+  });
+
+  final AudioFileEntity file;
+  final String displayName;
+  final _SyncState syncState;
+  final bool isPendingSwap;
+  final bool isPendingSync;
+  final Future<Uint8List?> Function(String path) loadCoverArt;
+  final VoidCallback? onTapReplace;
+  final void Function(TapDownDetails details) onSecondaryTap;
+  final VoidCallback? onSync;
+  final VoidCallback onSwap;
+
+  @override
+  State<_TrackTile> createState() => _TrackTileState();
+}
+
+class _TrackTileState extends State<_TrackTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final file = widget.file;
+    final hasSingleDash = widget.displayName.split('-').length - 1 == 1;
+
+    final Color rowColor = _hovered
+        ? colorScheme.onSurface.withValues(alpha: 0.045)
+        : Colors.transparent;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1),
+        child: GestureDetector(
+          onTap: widget.onTapReplace,
+          onSecondaryTapDown: widget.onSecondaryTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: rowColor,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                _TrackArtwork(
+                    path: file.path, loadCoverArt: widget.loadCoverArt),
+                const SizedBox(width: 12),
+                _FormatChip(
+                  format: file.format,
+                  extension: extensionFromPath(file.path),
+                ),
+                const SizedBox(width: 10),
+                _SyncBadge(state: widget.syncState),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    widget.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: widget.isPendingSwap
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: widget.isPendingSwap
+                          ? colorScheme.primary
+                          : colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                if (widget.onSync != null || widget.isPendingSync)
+                  _TrackAction(
+                    icon: Icons.sync_rounded,
+                    tooltip: widget.isPendingSync
+                        ? 'Undo metadata update'
+                        : 'Update metadata from file name',
+                    color: widget.isPendingSync
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                    onPressed: widget.onSync,
+                  ),
+                if (hasSingleDash)
+                  _TrackAction(
+                    icon: Icons.swap_horiz_rounded,
+                    tooltip: widget.isPendingSwap ? 'Undo' : 'Swap',
+                    color: widget.isPendingSwap
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                    onPressed: widget.onSwap,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FormatChip extends StatelessWidget {
+  const _FormatChip({required this.format, required this.extension});
+
+  final AudioFormat format;
+  final String extension;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _chipColor(format);
+    return Container(
+      alignment: Alignment.center,
+      constraints: const BoxConstraints(minWidth: 44, minHeight: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: accent.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        extension.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.clip,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: _extensionTextColor(context, format),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+      ),
+    );
+  }
+}
+
+class _TrackAction extends StatelessWidget {
+  const _TrackAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      tooltip: tooltip,
+      color: color,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+    );
   }
 }
 
@@ -649,7 +842,7 @@ class _SyncBadge extends StatelessWidget {
   }
 }
 
-MaterialColor _extensionColor(AudioFormat format) {
+Color _extensionColor(AudioFormat format) {
   switch (format) {
     case AudioFormat.mp3:
       return AppColors.mp3;
@@ -671,8 +864,8 @@ MaterialColor _extensionColor(AudioFormat format) {
 }
 
 Color _chipColor(AudioFormat format) {
-  final hsl = HSLColor.fromColor(_extensionColor(format).shade600);
-  return hsl.withSaturation(hsl.saturation * 0.35).toColor();
+  final hsl = HSLColor.fromColor(_extensionColor(format));
+  return hsl.withSaturation(hsl.saturation * 0.75).toColor();
 }
 
 Color _extensionTextColor(BuildContext context, AudioFormat format) {

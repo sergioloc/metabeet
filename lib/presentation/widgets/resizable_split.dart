@@ -64,28 +64,40 @@ class _ResizableSplitState extends State<ResizableSplit> {
   }
 }
 
-class _ResizeHandle extends StatelessWidget {
+class _ResizeHandle extends StatefulWidget {
   const _ResizeHandle({required this.onHorizontalDrag});
 
   final void Function(double delta) onHorizontalDrag;
 
   @override
+  State<_ResizeHandle> createState() => _ResizeHandleState();
+}
+
+class _ResizeHandleState extends State<_ResizeHandle> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final color = _hovered ? colorScheme.primary : colorScheme.outline;
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: (details) => onHorizontalDrag(details.delta.dx),
+        onHorizontalDragUpdate: (details) =>
+            widget.onHorizontalDrag(details.delta.dx),
         child: Container(
           width: 8,
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+          color: Colors.transparent,
           alignment: Alignment.center,
-          child: Container(
-            width: 3,
-            height: 48,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: _hovered ? 4 : 2,
+            height: 44,
             decoration: BoxDecoration(
-              color: colorScheme.outline,
+              color: color.withValues(alpha: _hovered ? 0.9 : 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),

@@ -134,15 +134,31 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.folder_open_outlined,
-            size: 64,
-            color: colorScheme.outline,
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Icon(
+              Icons.folder_open_rounded,
+              size: 44,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Text(
             'Click "Import" to select a folder',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Your music library will appear here',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
           ),
@@ -166,11 +182,25 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: colorScheme.error),
-            const SizedBox(height: 16),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: colorScheme.errorContainer.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                Icons.error_outline_rounded,
+                size: 40,
+                color: colorScheme.error,
+              ),
+            ),
+            const SizedBox(height: 18),
             Text(
               'Could not import the folder',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
             if (message != null) ...[
               const SizedBox(height: 8),
@@ -182,11 +212,11 @@ class _ErrorState extends StatelessWidget {
                     ),
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             FilledButton.icon(
               onPressed: () =>
                   context.read<HomeBloc>().add(const ImportFolderPressed()),
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
               label: const Text('Try again'),
             ),
           ],
@@ -196,7 +226,7 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-/// Full-screen banner showing the folder precache progress.
+/// Windows 11 style progress card shown while importing a folder.
 class _PrecacheOverlay extends StatelessWidget {
   const _PrecacheOverlay({required this.progress});
 
@@ -210,39 +240,55 @@ class _PrecacheOverlay extends StatelessWidget {
     final detail = 'Importing ${progress.done}/${progress.total} files…';
 
     return ColoredBox(
-      color: colorScheme.surface.withValues(alpha: 0.92),
+      color: Colors.black.withValues(alpha: 0.4),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: colorScheme.outlineVariant),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.folder_open_outlined,
-                  size: 40,
-                  color: colorScheme.primary,
+                Row(
+                  children: [
+                    Icon(Icons.folder_open_rounded,
+                        size: 22, color: colorScheme.primary),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Importing folder…',
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  'Importing folder…',
-                  style: textTheme.titleMedium,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    minHeight: 6,
+                    value: fraction == 0 ? null : fraction,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 10),
                 Text(
                   detail,
                   style: textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    minHeight: 8,
-                    value: fraction == 0 ? null : fraction,
                   ),
                 ),
               ],

@@ -27,34 +27,38 @@ class SongDetailPanel extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Material(
-      color: colorScheme.surfaceContainerLowest,
+      color: colorScheme.surfaceContainerLow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
             child: Row(
               children: [
-                Icon(Icons.info_outline, color: colorScheme.primary),
-                const SizedBox(width: 10),
+                Icon(Icons.info_outline_rounded,
+                    size: 17, color: colorScheme.onSurfaceVariant),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Details',
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    style: textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurfaceVariant,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ),
                 IconButton(
                   onPressed: onClose,
-                  icon: const Icon(Icons.close, size: 20),
+                  icon: const Icon(Icons.close_rounded, size: 20),
                   tooltip: 'Close details',
+                  visualDensity: VisualDensity.compact,
                   color: colorScheme.onSurfaceVariant,
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
+          const Divider(),
           Expanded(child: _buildContent(context)),
         ],
       ),
@@ -73,16 +77,24 @@ class SongDetailPanel extends StatelessWidget {
         final meta = metadata;
         if (meta == null) {
           return Center(
-            child: Text(
-              'No metadata available',
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.music_off_outlined,
+                    size: 40, color: colorScheme.outlineVariant),
+                const SizedBox(height: 10),
+                Text(
+                  'No metadata available',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           );
         }
         return ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           children: [
             Center(
               child: _CoverArt(
@@ -90,12 +102,12 @@ class SongDetailPanel extends StatelessWidget {
                 format: meta.format,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Text(
               meta.title ?? meta.name.replaceFirst('.${meta.format.name}', ''),
               textAlign: TextAlign.center,
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -110,9 +122,9 @@ class SongDetailPanel extends StatelessWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             _Section(title: 'File', rows: _fileRows(meta)),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             _Section(title: 'Metadata', rows: _metadataRows(meta)),
           ],
         );
@@ -174,28 +186,42 @@ class _CoverArt extends StatelessWidget {
     const size = 200.0;
     final colorScheme = Theme.of(context).colorScheme;
 
-    final fallback = Container(
+    return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child:
-          Icon(Icons.music_note, size: 64, color: colorScheme.onSurfaceVariant),
+      clipBehavior: Clip.antiAlias,
+      child: _buildInner(context),
     );
+  }
 
+  Widget _buildInner(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final data = bytes;
-    if (data == null) return fallback;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.memory(
-        data,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => fallback,
+    if (data == null) {
+      return Icon(
+        Icons.music_note_rounded,
+        size: 72,
+        color: colorScheme.onSurfaceVariant,
+      );
+    }
+    return Image.memory(
+      data,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => Icon(
+        Icons.music_note_rounded,
+        size: 72,
+        color: colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -218,9 +244,9 @@ class _Section extends StatelessWidget {
         Text(
           title,
           style: textTheme.labelSmall?.copyWith(
-            color: colorScheme.primary,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
           ),
         ),
         const SizedBox(height: 8),
@@ -228,19 +254,18 @@ class _Section extends StatelessWidget {
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+            border: Border.all(color: colorScheme.outlineVariant),
           ),
+          clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
               for (var i = 0; i < rows.length; i++) ...[
                 if (i > 0)
                   Divider(
-                      height: 1,
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
