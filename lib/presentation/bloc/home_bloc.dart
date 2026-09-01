@@ -141,6 +141,16 @@ class SwapRequested extends HomeEvent {
   List<Object?> get props => [path];
 }
 
+class RenameFileRequested extends HomeEvent {
+  const RenameFileRequested(this.path, this.newName);
+
+  final String path;
+  final String newName;
+
+  @override
+  List<Object?> get props => [path, newName];
+}
+
 class SavePendingRenames extends HomeEvent {
   const SavePendingRenames();
 }
@@ -174,6 +184,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<ImportFolderPressed>(_onImportFolderPressed);
     on<FolderSelected>(_onFolderSelected);
     on<SwapRequested>(_onSwapRequested);
+    on<RenameFileRequested>(_onRenameFileRequested);
     on<SavePendingRenames>(_onSavePendingRenames);
     on<FileSelected>(_onFileSelected);
     on<FileDetailClosed>(_onFileDetailClosed);
@@ -271,6 +282,20 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       if (newPath != null) {
         pending[event.path] = newPath;
       }
+    }
+    emit(state.copyWith(pendingRenames: pending));
+  }
+
+  void _onRenameFileRequested(
+    RenameFileRequested event,
+    Emitter<HomeState> emit,
+  ) {
+    final newPath = renamePath(event.path, event.newName);
+    final pending = Map<String, String>.of(state.pendingRenames);
+    if (newPath == event.path) {
+      pending.remove(event.path);
+    } else {
+      pending[event.path] = newPath;
     }
     emit(state.copyWith(pendingRenames: pending));
   }

@@ -48,3 +48,13 @@ String? swapNamePath(String path) {
   final swapped = '$second - $first';
   return '$dir$swapped${extension.isEmpty ? '' : '.$extension'}';
 }
+
+/// Builds the full path for [path] after renaming it to
+/// [newNameWithoutExtension] inside the same directory, preserving the
+/// original extension.
+String renamePath(String path, String newNameWithoutExtension) {
+  final extension = extensionFromPath(path);
+  final dir = path.substring(0, path.length - nameFromPath(path).length);
+  final name = newNameWithoutExtension.trim();
+  return '$dir$name${extension.isEmpty ? '' : '.$extension'}';
+}

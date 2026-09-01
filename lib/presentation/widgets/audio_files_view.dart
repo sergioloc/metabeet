@@ -20,6 +20,7 @@ class AudioFilesView extends StatefulWidget {
     required this.loadMetadata,
     required this.pendingRenames,
     required this.onSwap,
+    this.onRename,
     this.onFileSelected,
     this.error,
     this.onRetry,
@@ -32,6 +33,7 @@ class AudioFilesView extends StatefulWidget {
   final Future<AudioMetadataEntity?> Function(String path) loadMetadata;
   final Map<String, String> pendingRenames;
   final void Function(String path) onSwap;
+  final void Function(String path, String newName)? onRename;
   final void Function(String path)? onFileSelected;
   final String? error;
   final VoidCallback? onRetry;
@@ -232,83 +234,166 @@ itemBuilder: (context, index) {
                 nameWithoutExtension(widget.pendingRenames[file.path] ?? file.path);
             final hasSingleDash = displayName.split('-').length - 1 == 1;
             final isPendingSwap = widget.pendingRenames.containsKey(file.path);
-            return ListTile(
-              dense: true,
-              onTap: widget.onFileSelected == null
-                  ? null
-                  : () => widget.onFileSelected!(file.path),
-              leading: _TrackArtwork(
-                path: file.path,
-                loadCoverArt: widget.loadCoverArt,
-              ),
-              title: Row(
-                children: [
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 48,
-                    height: 20,
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _chipColor(file.format).withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _chipColor(file.format).withValues(
-                            alpha: 0.35,
+            return GestureDetector(
+              onSecondaryTapDown: (details) {
+                _showContextMenu(
+                  context,
+                  details,
+                  file.path,
+                  nameWithoutExtension(file.path),
+                );
+              },
+              child: ListTile(
+                dense: true,
+                onTap: widget.onFileSelected == null
+                    ? null
+                    : () => widget.onFileSelected!(file.path),
+                leading: _TrackArtwork(
+                  path: file.path,
+                  loadCoverArt: widget.loadCoverArt,
+                ),
+                title: Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 48,
+                      height: 20,
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: _chipColor(file.format).withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _chipColor(file.format).withValues(
+                              alpha: 0.35,
+                            ),
+                            width: 1,
                           ),
-                          width: 1,
+                        ),
+                        child: Text(
+                          extensionFromPath(file.path),
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          style: textTheme.labelSmall?.copyWith(
+                            color: _extensionTextColor(context, file.format),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    _SyncBadge(
+                      filePath: file.path,
+                      loadMetadata: widget.loadMetadata,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
                       child: Text(
-                        extensionFromPath(file.path),
+                        displayName,
                         maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        style: textTheme.labelSmall?.copyWith(
-                          color: _extensionTextColor(context, file.format),
-                          fontWeight: FontWeight.w600,
+                        overflow: TextOverflow.ellipsis,
+                        style: isPendingSwap
+                            ? TextStyle(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              )
+                            : null,
+                      ),
+                    ),
+                    if (hasSingleDash)
+                      IconButton(
+                        onPressed: () => widget.onSwap(file.path),
+                        icon: const Icon(Icons.swap_horiz, size: 18),
+                        tooltip: isPendingSwap ? 'Undo' : 'Swap',
+                        color: isPendingSwap
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 24,
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _SyncBadge(
-                    filePath: file.path,
-                    loadMetadata: widget.loadMetadata,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: isPendingSwap
-                          ? TextStyle(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            )
-                          : null,
-                    ),
-                  ),
-                  if (hasSingleDash)
-                    IconButton(
-                      onPressed: () => widget.onSwap(file.path),
-                      icon: const Icon(Icons.swap_horiz, size: 18),
-                      tooltip: isPendingSwap ? 'Undo' : 'Swap',
-                      color: isPendingSwap
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 24,
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             );
           },
         );
     }
+  }
+
+  void _showContextMenu(
+    BuildContext context,
+    TapDownDetails details,
+    String path,
+    String currentName,
+  ) {
+    if (widget.onRename == null) return;
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+      ),
+      items: [
+        const PopupMenuItem<String>(
+          value: 'rename',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, size: 18),
+              SizedBox(width: 12),
+              Text('Rename'),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'rename' && context.mounted) {
+        _showRenameDialog(context, path, currentName);
+      }
+    });
+  }
+
+  Future<void> _showRenameDialog(
+    BuildContext context,
+    String path,
+    String currentName,
+  ) async {
+    final controller = TextEditingController(text: currentName);
+    final extension = extensionFromPath(path);
+    final submitted = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Rename file'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'File name',
+            suffixText: extension.isEmpty ? null : '.$extension',
+          ),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (submitted == null || !context.mounted) return;
+    final newName = submitted.trim();
+    if (newName.isEmpty || newName == currentName) return;
+    widget.onRename!(path, newName);
   }
 
   String _fileCountLabel(int count) =>

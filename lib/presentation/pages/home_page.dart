@@ -75,6 +75,8 @@ class HomePage extends StatelessWidget {
       loadMetadata: (path) => context.read<HomeBloc>().loadMetadata(path),
       pendingRenames: state.pendingRenames,
       onSwap: (path) => context.read<HomeBloc>().add(SwapRequested(path)),
+      onRename: (path, newName) =>
+          context.read<HomeBloc>().add(RenameFileRequested(path, newName)),
       onFileSelected: (path) =>
           context.read<HomeBloc>().add(FileSelected(path)),
       error: state.audioError,
