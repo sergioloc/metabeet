@@ -262,7 +262,7 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
       try {
         final metadata = readMetadata(File(path), getImage: true);
         final artist = _hasCustomArtist(format)
-            ? _resolveArtist(path, format)
+            ? _resolveArtist(path, format, metadata.artist)
             : metadata.artist;
         final duration = metadata.duration;
         final pictures = metadata.pictures;
@@ -393,12 +393,17 @@ bool _isWritable(AudioFormat format) =>
 /// Resolves the artist to use for a file.
 ///
 /// For MP3 the track artist (TPE1) is used, both for display and for the sync
-/// check. For FLAC/OGG the album artist tag is preferred, but `readMetadata`
-/// merges `ARTIST` and `ALBUMARTIST` into a single list so the raw Vorbis
-/// comments are read to isolate the album artist. The value is trimmed, and an
-/// empty value resolves to null. Returns null when the format has no dedicated
-/// artist tag.
-String? _resolveArtist(String path, AudioFormat format) {
+/// check. For FLAC/OGG the album artist tag is preferred (as `readMetadata`
+/// merges `ARTIST` and `ALBUMARTIST` into a single list, the raw Vorbis
+/// comments are read to isolate the album artist); when no album artist tag is
+/// present the track artist read by [fallbackArtist] is used instead. The value
+/// is trimmed, and an empty value resolves to null. Returns null when the
+/// format has no dedicated artist tag.
+String? _resolveArtist(
+  String path,
+  AudioFormat format,
+  String? fallbackArtist,
+) {
   switch (format) {
     case AudioFormat.mp3:
       try {
@@ -412,7 +417,10 @@ String? _resolveArtist(String path, AudioFormat format) {
       return null;
     case AudioFormat.flac:
     case AudioFormat.ogg:
-      return _vorbisAlbumArtist(path);
+      final albumArtist = _vorbisAlbumArtist(path);
+      if (albumArtist != null && albumArtist.isNotEmpty) return albumArtist;
+      final fallback = fallbackArtist?.trim();
+      return fallback == null || fallback.isEmpty ? null : fallback;
     default:
       return null;
   }
@@ -503,7 +511,7 @@ List<Map<String, Object?>> _readBatch(List<String> paths) {
     try {
       final metadata = readMetadata(File(path), getImage: true);
       final artist = _hasCustomArtist(format)
-          ? _resolveArtist(path, format)
+          ? _resolveArtist(path, format, metadata.artist)
           : metadata.artist;
       final duration = metadata.duration;
       final pictures = metadata.pictures;
