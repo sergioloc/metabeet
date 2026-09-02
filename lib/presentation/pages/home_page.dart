@@ -36,13 +36,15 @@ class HomePage extends StatelessWidget {
                   : () =>
                       context.read<HomeBloc>().add(const ImportFolderPressed()),
               onSavePressed: (state.pendingRenames.isEmpty &&
-                          state.pendingMetadataUpdates.isEmpty) ||
+                          state.pendingMetadataUpdates.isEmpty &&
+                          state.pendingDeletes.isEmpty) ||
                       state.isSaving
                   ? null
                   : () =>
                       context.read<HomeBloc>().add(const SavePendingRenames()),
               saveCount: state.pendingRenames.length +
-                  state.pendingMetadataUpdates.length,
+                  state.pendingMetadataUpdates.length +
+                  state.pendingDeletes.length,
             ),
             body: _buildBody(context, state),
           );
@@ -92,7 +94,10 @@ class HomePage extends StatelessWidget {
       loadMetadata: (path) => context.read<HomeBloc>().loadMetadata(path),
       pendingRenames: state.pendingRenames,
       pendingMetadataUpdates: state.pendingMetadataUpdates,
+      pendingDeletes: state.pendingDeletes,
       onSwap: (path) => context.read<HomeBloc>().add(SwapRequested(path)),
+      onDelete: (path) => context.read<HomeBloc>().add(DeleteRequested(path)),
+      onRestore: (path) => context.read<HomeBloc>().add(RestoreRequested(path)),
       onRename: (path, newName) =>
           context.read<HomeBloc>().add(RenameFileRequested(path, newName)),
       onSyncFromName: (path) =>

@@ -20,6 +20,7 @@ import '../../../domain/usecases/get_audio_files.dart';
 import '../../../domain/usecases/get_cover_art.dart';
 import '../../../domain/usecases/get_folder_subfolders.dart';
 import '../../../domain/usecases/get_metadata.dart';
+import '../../../domain/usecases/delete_files.dart';
 import '../../../domain/usecases/import_folder.dart';
 import '../../../domain/usecases/precache_audio_files.dart';
 import '../../../domain/usecases/rename_files.dart';
@@ -38,6 +39,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<SwapRequested>(_onSwapRequested);
     on<RenameFileRequested>(_onRenameFileRequested);
     on<SyncMetadataFromName>(_onSyncMetadataFromName);
+    on<DeleteRequested>(_onDeleteRequested);
+    on<RestoreRequested>(_onRestoreRequested);
     on<SavePendingRenames>(_onSavePendingRenames);
     on<FileSelected>(_onFileSelected);
     on<FileDetailClosed>(_onFileDetailClosed);
@@ -67,6 +70,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       GetMetadataUseCase(_audioFileRepository);
   late final UpdateMetadataFromNameUseCase _updateMetadataFromName =
       UpdateMetadataFromNameUseCase(_audioFileRepository);
+  late final DeleteFilesUseCase _deleteFiles =
+      DeleteFilesUseCase(_audioFileRepository);
 
   HomeError _mapError(Object error) {
     return HomeError.ERROR;
@@ -134,6 +139,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       audioStatus: AudioStatus.loading,
       audioFiles: const [],
       audioError: null,
+      pendingRenames: const {},
+      pendingMetadataUpdates: const {},
+      pendingDeletes: const {},
       clearSelection: true,
     ));
     await _loadAudioFiles(event.folder, emit);
@@ -219,13 +227,40 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     emit(state.copyWith(pendingMetadataUpdates: pending));
   }
 
+  void _onDeleteRequested(
+    DeleteRequested event,
+    Emitter<HomeState> emit,
+  ) {
+    // Cannot delete a file that already has pending edits.
+    if (state.pendingRenames.containsKey(event.path) ||
+        state.pendingMetadataUpdates.containsKey(event.path)) {
+      return;
+    }
+    final pending = Set<String>.of(state.pendingDeletes)..add(event.path);
+    emit(state.copyWith(pendingDeletes: pending));
+  }
+
+  void _onRestoreRequested(
+    RestoreRequested event,
+    Emitter<HomeState> emit,
+  ) {
+    final pending = Set<String>.of(state.pendingDeletes)..remove(event.path);
+    emit(state.copyWith(pendingDeletes: pending));
+  }
+
   Future<void> _onSavePendingRenames(
     SavePendingRenames event,
     Emitter<HomeState> emit,
   ) async {
     final pending = state.pendingRenames;
     final pendingMetadata = state.pendingMetadataUpdates;
-    if ((pending.isEmpty && pendingMetadata.isEmpty) || state.isSaving) return;
+    final pendingDeletes = state.pendingDeletes;
+    if ((pending.isEmpty &&
+            pendingMetadata.isEmpty &&
+            pendingDeletes.isEmpty) ||
+        state.isSaving) {
+      return;
+    }
 
     emit(state.copyWith(isSaving: true));
     try {
@@ -238,12 +273,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             FileRenameRequest(oldPath: entry.key, newPath: entry.value),
         ]);
       }
+      if (pendingDeletes.isNotEmpty) {
+        await _deleteFiles.execute(pendingDeletes.toList());
+      }
 
       final folder = state.rootFolder ?? state.selectedFolder;
       if (folder == null) {
         emit(state.copyWith(
           pendingRenames: const {},
           pendingMetadataUpdates: const {},
+          pendingDeletes: const {},
           isSaving: false,
           notice: 'Changes saved',
         ));
@@ -254,6 +293,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         selectedFolder: folder,
         pendingRenames: const {},
         pendingMetadataUpdates: const {},
+        pendingDeletes: const {},
         isSaving: false,
         audioStatus: AudioStatus.loading,
         audioFiles: const [],

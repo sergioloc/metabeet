@@ -34,6 +34,9 @@ abstract class AudioFileLocalDataSource {
   Future<void> renameFiles(List<FileRenameRequest> requests);
 
   Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests);
+
+  /// Permanently deletes the audio files at [paths], removing any cached data.
+  Future<void> deleteFiles(List<String> paths);
 }
 
 /// Reads audio files and their cover art off the UI thread, caching every
@@ -363,6 +366,19 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
     for (final request in requests) {
       _metadataCache.remove(request.path);
       _coverArtCache.remove(request.path);
+    }
+  }
+
+  @override
+  Future<void> deleteFiles(List<String> paths) async {
+    final existing = <String>[];
+    for (final path in paths) {
+      if (File(path).existsSync()) existing.add(path);
+    }
+    for (final path in existing) {
+      File(path).deleteSync();
+      _metadataCache.remove(path);
+      _coverArtCache.remove(path);
     }
   }
 }

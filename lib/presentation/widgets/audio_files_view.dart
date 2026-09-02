@@ -21,7 +21,10 @@ class AudioFilesView extends StatefulWidget {
     required this.loadMetadata,
     required this.pendingRenames,
     required this.pendingMetadataUpdates,
+    required this.pendingDeletes,
     required this.onSwap,
+    this.onDelete,
+    this.onRestore,
     this.onRename,
     this.onSyncFromName,
     this.onFileSelected,
@@ -36,7 +39,10 @@ class AudioFilesView extends StatefulWidget {
   final Future<AudioMetadataEntity?> Function(String path) loadMetadata;
   final Map<String, String> pendingRenames;
   final Map<String, MetadataUpdateRequest> pendingMetadataUpdates;
+  final Set<String> pendingDeletes;
   final void Function(String path) onSwap;
+  final void Function(String path)? onDelete;
+  final void Function(String path)? onRestore;
   final void Function(String path, String newName)? onRename;
   final void Function(String path)? onSyncFromName;
   final void Function(String path)? onFileSelected;
@@ -276,6 +282,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
             final file = files[index];
             return _TrackTile(
               file: file,
+              isPendingDelete: widget.pendingDeletes.contains(file.path),
               displayName: nameWithoutExtension(
                   widget.pendingRenames[file.path] ?? file.path),
               syncState: _syncStates[file.path] ?? _SyncState.pending,
@@ -297,6 +304,12 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                   ? () => widget.onSyncFromName!(file.path)
                   : null,
               onSwap: () => widget.onSwap(file.path),
+              onDelete: widget.onDelete == null
+                  ? null
+                  : () => widget.onDelete!(file.path),
+              onRestore: widget.onRestore == null
+                  ? null
+                  : () => widget.onRestore!(file.path),
             );
           },
         );
@@ -537,11 +550,14 @@ class _TrackTile extends StatefulWidget {
     required this.syncState,
     required this.isPendingSwap,
     required this.isPendingSync,
+    required this.isPendingDelete,
     required this.loadCoverArt,
     required this.onTapReplace,
     required this.onSecondaryTap,
     required this.onSync,
     required this.onSwap,
+    this.onDelete,
+    this.onRestore,
   });
 
   final AudioFileEntity file;
@@ -549,11 +565,14 @@ class _TrackTile extends StatefulWidget {
   final _SyncState syncState;
   final bool isPendingSwap;
   final bool isPendingSync;
+  final bool isPendingDelete;
   final Future<Uint8List?> Function(String path) loadCoverArt;
   final VoidCallback? onTapReplace;
   final void Function(TapDownDetails details) onSecondaryTap;
   final VoidCallback? onSync;
   final VoidCallback onSwap;
+  final VoidCallback? onDelete;
+  final VoidCallback? onRestore;
 
   @override
   State<_TrackTile> createState() => _TrackTileState();
@@ -567,6 +586,7 @@ class _TrackTileState extends State<_TrackTile> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final file = widget.file;
+    final isPendingDelete = widget.isPendingDelete;
     final hasSingleDash = widget.displayName.split('-').length - 1 == 1;
 
     final Color rowColor = _hovered
@@ -579,62 +599,100 @@ class _TrackTileState extends State<_TrackTile> {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 1),
         child: GestureDetector(
-          onTap: widget.onTapReplace,
-          onSecondaryTapDown: widget.onSecondaryTap,
+          onTap: isPendingDelete ? null : widget.onTapReplace,
+          onSecondaryTapDown: isPendingDelete ? null : widget.onSecondaryTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              color: rowColor,
+              color: isPendingDelete
+                  ? colorScheme.errorContainer.withValues(alpha: 0.25)
+                  : rowColor,
               borderRadius: BorderRadius.circular(6),
+              border: isPendingDelete
+                  ? Border.all(
+                      color: colorScheme.error.withValues(alpha: 0.35),
+                    )
+                  : null,
             ),
             child: Row(
               children: [
-                _TrackArtwork(
-                    path: file.path, loadCoverArt: widget.loadCoverArt),
+                Opacity(
+                  opacity: isPendingDelete ? 0.45 : 1,
+                  child: _TrackArtwork(
+                    path: file.path,
+                    loadCoverArt: widget.loadCoverArt,
+                  ),
+                ),
                 const SizedBox(width: 12),
-                _FormatChip(
-                  format: file.format,
-                  extension: extensionFromPath(file.path),
+                Opacity(
+                  opacity: isPendingDelete ? 0.45 : 1,
+                  child: _FormatChip(
+                    format: file.format,
+                    extension: extensionFromPath(file.path),
+                  ),
                 ),
                 const SizedBox(width: 10),
-                _SyncBadge(state: widget.syncState),
+                Opacity(
+                  opacity: isPendingDelete ? 0.45 : 1,
+                  child: _SyncBadge(state: widget.syncState),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    widget.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      fontWeight: widget.isPendingSwap
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      color: widget.isPendingSwap
-                          ? colorScheme.primary
-                          : colorScheme.onSurface,
+                  child: Opacity(
+                    opacity: isPendingDelete ? 0.55 : 1,
+                    child: Text(
+                      widget.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        fontWeight: widget.isPendingSwap
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                        color: widget.isPendingSwap
+                            ? colorScheme.primary
+                            : colorScheme.onSurface,
+                        decoration:
+                            isPendingDelete ? TextDecoration.lineThrough : null,
+                      ),
                     ),
                   ),
                 ),
-                if (widget.onSync != null || widget.isPendingSync)
+                if (isPendingDelete) ...[
                   _TrackAction(
-                    icon: Icons.sync_rounded,
-                    tooltip: widget.isPendingSync
-                        ? 'Undo metadata update'
-                        : 'Update metadata from file name',
-                    color: widget.isPendingSync
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                    onPressed: widget.onSync,
+                    icon: Icons.restore_rounded,
+                    tooltip: 'Restore',
+                    color: colorScheme.onSurfaceVariant,
+                    onPressed: widget.onRestore,
                   ),
-                if (hasSingleDash)
+                ] else ...[
+                  if (widget.onSync != null || widget.isPendingSync)
+                    _TrackAction(
+                      icon: Icons.sync_rounded,
+                      tooltip: widget.isPendingSync
+                          ? 'Undo metadata update'
+                          : 'Update metadata from file name',
+                      color: widget.isPendingSync
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                      onPressed: widget.onSync,
+                    ),
+                  if (hasSingleDash)
+                    _TrackAction(
+                      icon: Icons.swap_horiz_rounded,
+                      tooltip: widget.isPendingSwap ? 'Undo' : 'Swap',
+                      color: widget.isPendingSwap
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                      onPressed: widget.onSwap,
+                    ),
                   _TrackAction(
-                    icon: Icons.swap_horiz_rounded,
-                    tooltip: widget.isPendingSwap ? 'Undo' : 'Swap',
-                    color: widget.isPendingSwap
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                    onPressed: widget.onSwap,
+                    icon: Icons.close_rounded,
+                    tooltip: 'Delete',
+                    color: colorScheme.onSurfaceVariant,
+                    onPressed: widget.onDelete,
                   ),
+                ],
               ],
             ),
           ),

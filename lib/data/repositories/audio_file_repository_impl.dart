@@ -41,4 +41,8 @@ class AudioFileRepositoryImpl implements AudioFileRepository {
   @override
   Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests) =>
       localDataSource.updateMetadataFromFiles(requests);
+
+  @override
+  Future<void> deleteFiles(List<String> paths) =>
+      localDataSource.deleteFiles(paths);
 }

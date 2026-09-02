@@ -19,6 +19,7 @@ class HomeState extends Equatable {
     this.audioError,
     this.pendingRenames = const {},
     this.pendingMetadataUpdates = const {},
+    this.pendingDeletes = const {},
     this.isSaving = false,
     this.notice,
     this.selectedFilePath,
@@ -38,6 +39,7 @@ class HomeState extends Equatable {
   final String? audioError;
   final Map<String, String> pendingRenames;
   final Map<String, MetadataUpdateRequest> pendingMetadataUpdates;
+  final Set<String> pendingDeletes;
   final bool isSaving;
   final String? notice;
   final String? selectedFilePath;
@@ -59,6 +61,7 @@ class HomeState extends Equatable {
     String? audioError,
     Map<String, String>? pendingRenames,
     Map<String, MetadataUpdateRequest>? pendingMetadataUpdates,
+    Set<String>? pendingDeletes,
     bool? isSaving,
     Object? notice = _unset,
     String? selectedFilePath,
@@ -81,6 +84,7 @@ class HomeState extends Equatable {
       pendingRenames: pendingRenames ?? this.pendingRenames,
       pendingMetadataUpdates:
           pendingMetadataUpdates ?? this.pendingMetadataUpdates,
+      pendingDeletes: pendingDeletes ?? this.pendingDeletes,
       isSaving: isSaving ?? this.isSaving,
       notice: identical(notice, _unset) ? this.notice : notice as String?,
       selectedFilePath:
@@ -110,6 +114,7 @@ class HomeState extends Equatable {
         audioError,
         pendingRenames,
         pendingMetadataUpdates,
+        pendingDeletes,
         isSaving,
         notice,
         selectedFilePath,
