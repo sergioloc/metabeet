@@ -299,6 +299,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         audioFiles: const [],
         clearSelection: true,
       ));
+      await _precacheAudioFiles.execute(
+        folder.path,
+        onProgress: (progress) {
+          if (isClosed) return;
+          emit(state.copyWith(precacheProgress: progress));
+        },
+      );
       final (subfolders, files) = await (
         _getFolderSubfolders.execute(folder.path),
         _getAudioFiles.execute(folder.path),
@@ -308,6 +315,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           rootFolders: subfolders,
           audioFiles: files,
           audioStatus: AudioStatus.ready,
+          precacheProgress: null,
         ));
       }
       if (!isClosed) {
