@@ -73,14 +73,23 @@ class HomePage extends StatelessWidget {
     };
 
     final progress = state.precacheProgress;
-    if (progress == null) return content;
+    final showSaving = state.isSaving;
+    if (progress == null && !showSaving) return content;
+
+    final Widget? overlay;
+    if (state.isSaving) {
+      overlay = const Positioned.fill(child: _SavingOverlay());
+    } else if (progress != null) {
+      overlay = Positioned.fill(child: _PrecacheOverlay(progress: progress));
+    } else {
+      overlay = null;
+    }
+    if (overlay == null) return content;
 
     return Stack(
       children: [
         content,
-        Positioned.fill(
-          child: _PrecacheOverlay(progress: progress),
-        ),
+        overlay,
       ],
     );
   }
@@ -228,6 +237,65 @@ class _ErrorState extends StatelessWidget {
               label: const Text('Try again'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Windows 11 style loading card shown while applying pending changes.
+class _SavingOverlay extends StatelessWidget {
+  const _SavingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.4),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: colorScheme.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Saving changes…',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Please wait',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
