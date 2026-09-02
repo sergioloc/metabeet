@@ -57,11 +57,14 @@ class AudioFilesView extends StatefulWidget {
 
 enum _Filter { all, mismatch, noPattern }
 
+enum _FormatFilter { all, mp3, wav, flac }
+
 class _AudioFilesViewState extends State<AudioFilesView> {
   final TextEditingController _searchController = TextEditingController();
   final Map<String, _SyncState> _syncStates = {};
   String _query = '';
   _Filter _selectedFilter = _Filter.all;
+  _FormatFilter _selectedFormat = _FormatFilter.all;
   int _syncLoadGeneration = 0;
 
   @override
@@ -131,15 +134,25 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                 extensionFromPath(file.path).toLowerCase().contains(q);
           }).toList();
 
+    final byFormat = switch (_selectedFormat) {
+      _FormatFilter.all => bySearch,
+      _FormatFilter.mp3 =>
+        bySearch.where((f) => f.format == AudioFormat.mp3).toList(),
+      _FormatFilter.wav =>
+        bySearch.where((f) => f.format == AudioFormat.wav).toList(),
+      _FormatFilter.flac =>
+        bySearch.where((f) => f.format == AudioFormat.flac).toList(),
+    };
+
     switch (_selectedFilter) {
       case _Filter.all:
-        return bySearch;
+        return byFormat;
       case _Filter.mismatch:
-        return bySearch
+        return byFormat
             .where((f) => _syncStates[f.path] == _SyncState.mismatch)
             .toList();
       case _Filter.noPattern:
-        return bySearch
+        return byFormat
             .where((f) => _syncStates[f.path] == _SyncState.noPattern)
             .toList();
     }
@@ -209,9 +222,25 @@ class _AudioFilesViewState extends State<AudioFilesView> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: _FilterBar(
+                items: [
+                  const _FilterItem.all(),
+                  const _FilterItem(
+                      label: 'Mismatches', value: _Filter.mismatch),
+                  const _FilterItem(
+                      label: 'Wrong format', value: _Filter.noPattern),
+                ],
                 selected: _selectedFilter,
                 onSelected: (filter) {
                   setState(() => _selectedFilter = filter);
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: _FormatFilterBar(
+                selected: _selectedFormat,
+                onSelected: (format) {
+                  setState(() => _selectedFormat = format);
                 },
               ),
             ),
@@ -422,12 +451,90 @@ class _FileCountBadge extends StatelessWidget {
   }
 }
 
+/// Describes one pill in the sync/type filter bar.
+class _FilterItem {
+  const _FilterItem.all()
+      : label = 'All',
+        value = _Filter.all;
+
+  const _FilterItem({required this.label, required this.value});
+
+  final String label;
+  final _Filter value;
+}
+
 /// Windows 11 style filter: segmented pills inside a rounded container.
 class _FilterBar extends StatelessWidget {
-  const _FilterBar({required this.selected, required this.onSelected});
+  const _FilterBar({
+    required this.items,
+    required this.selected,
+    required this.onSelected,
+  });
 
+  final List<_FilterItem> items;
   final _Filter selected;
   final ValueChanged<_Filter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FilterBarContainer(
+      children: [
+        for (var i = 0; i < items.length; i++)
+          _FilterPill(
+            label: items[i].label,
+            selected: selected == items[i].value,
+            margin: EdgeInsets.only(left: i == 0 ? 0 : 3),
+            onTap: () => onSelected(items[i].value),
+          ),
+      ],
+    );
+  }
+}
+
+/// Windows 11 style filter for the audio file format (mp3/wav/flac).
+class _FormatFilterBar extends StatelessWidget {
+  const _FormatFilterBar({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _FormatFilter selected;
+  final ValueChanged<_FormatFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FilterBarContainer(
+      children: [
+        for (var i = 0; i < _FormatFilter.values.length; i++)
+          _FilterPill(
+            label: _label(_FormatFilter.values[i]),
+            selected: selected == _FormatFilter.values[i],
+            margin: EdgeInsets.only(left: i == 0 ? 0 : 3),
+            onTap: () => onSelected(_FormatFilter.values[i]),
+          ),
+      ],
+    );
+  }
+
+  String _label(_FormatFilter format) {
+    switch (format) {
+      case _FormatFilter.all:
+        return 'All formats';
+      case _FormatFilter.mp3:
+        return 'MP3';
+      case _FormatFilter.wav:
+        return 'WAV';
+      case _FormatFilter.flac:
+        return 'FLAC';
+    }
+  }
+}
+
+/// Shared visual container for the segmented filter pill bars.
+class _FilterBarContainer extends StatelessWidget {
+  const _FilterBarContainer({required this.children});
+
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
@@ -439,30 +546,11 @@ class _FilterBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < _Filter.values.length; i++)
-            _FilterPill(
-              label: _label(_Filter.values[i]),
-              selected: selected == _Filter.values[i],
-              margin: EdgeInsets.only(left: i == 0 ? 0 : 3),
-              onTap: () => onSelected(_Filter.values[i]),
-            ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(mainAxisSize: MainAxisSize.min, children: children),
       ),
     );
-  }
-
-  String _label(_Filter filter) {
-    switch (filter) {
-      case _Filter.all:
-        return 'All';
-      case _Filter.mismatch:
-        return 'Mismatches';
-      case _Filter.noPattern:
-        return 'Wrong format';
-    }
   }
 }
 
