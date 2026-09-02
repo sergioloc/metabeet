@@ -44,8 +44,11 @@ class HomePage extends StatelessWidget {
                           state.pendingDeletes.isEmpty) ||
                       state.isSaving
                   ? null
-                  : () =>
-                      context.read<HomeBloc>().add(const SavePendingRenames()),
+                  : () {
+                      // Stop any playback first so file operations are safe.
+                      context.read<PlayerBloc>().add(const StopRequested());
+                      context.read<HomeBloc>().add(const SavePendingRenames());
+                    },
               saveCount: state.pendingRenames.length +
                   state.pendingMetadataUpdates.length +
                   state.pendingDeletes.length,
