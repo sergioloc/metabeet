@@ -113,19 +113,24 @@ class HomePage extends StatelessWidget {
       },
     );
 
-    if (state.selectedFilePath == null) return right;
+    final hasSelection = state.selectedFilePath != null;
 
+    // Keep the songs list at a stable position in the tree so its state (and
+    // scroll offset) survives opening and closing the detail panel.
     return ResizableSplit(
-      initialFraction: 0.6,
-      minFraction: 0.3,
-      maxFraction: 0.75,
+      initialFraction: hasSelection ? 0.6 : 1.0,
+      minFraction: hasSelection ? 0.3 : 0.9,
+      maxFraction: hasSelection ? 0.75 : 0.98,
       left: right,
-      right: SongDetailPanel(
-        status: state.metadataStatus,
-        metadata: state.selectedMetadata,
-        coverArt: state.selectedCoverArt,
-        onClose: () => context.read<HomeBloc>().add(const FileDetailClosed()),
-      ),
+      right: hasSelection
+          ? SongDetailPanel(
+              status: state.metadataStatus,
+              metadata: state.selectedMetadata,
+              coverArt: state.selectedCoverArt,
+              onClose: () =>
+                  context.read<HomeBloc>().add(const FileDetailClosed()),
+            )
+          : const SizedBox.shrink(),
     );
   }
 }
