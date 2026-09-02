@@ -1,12 +1,16 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/precache_progress.dart';
 import '../bloc/home/home_bloc.dart';
+import '../bloc/player/player_bloc.dart';
 import '../widgets/app_toolbar.dart';
 import '../widgets/audio_files_view.dart';
 import '../widgets/beet_logo.dart';
 import '../widgets/folder_tree_view.dart';
+import '../widgets/player_bar.dart';
 import '../widgets/resizable_split.dart';
 import '../widgets/song_detail_panel.dart';
 
@@ -36,13 +40,18 @@ class HomePage extends StatelessWidget {
                   : () =>
                       context.read<HomeBloc>().add(const ImportFolderPressed()),
               onSavePressed: (state.pendingRenames.isEmpty &&
-                          state.pendingMetadataUpdates.isEmpty) ||
+                          state.pendingMetadataUpdates.isEmpty &&
+                          state.pendingDeletes.isEmpty) ||
                       state.isSaving
                   ? null
-                  : () =>
-                      context.read<HomeBloc>().add(const SavePendingRenames()),
+                  : () {
+                      // Stop any playback first so file operations are safe.
+                      context.read<PlayerBloc>().add(const StopRequested());
+                      context.read<HomeBloc>().add(const SavePendingRenames());
+                    },
               saveCount: state.pendingRenames.length +
-                  state.pendingMetadataUpdates.length,
+                  state.pendingMetadataUpdates.length +
+                  state.pendingDeletes.length,
             ),
             body: _buildBody(context, state),
           );
@@ -70,17 +79,61 @@ class HomePage extends StatelessWidget {
         ),
     };
 
+    // The player bar spans the full width beneath the main content, and
+    // collapses to nothing when no track is loaded.
+    final page = Column(
+      children: [
+        Expanded(child: content),
+        const PlayerBar(),
+      ],
+    );
+
     final progress = state.precacheProgress;
-    if (progress == null) return content;
+    final showSaving = state.isSaving;
+    if (progress == null && !showSaving) return page;
+
+    final Widget? overlay;
+    if (state.isSaving) {
+      overlay = const Positioned.fill(child: _SavingOverlay());
+    } else if (progress != null) {
+      overlay = Positioned.fill(child: _PrecacheOverlay(progress: progress));
+    } else {
+      overlay = null;
+    }
+    if (overlay == null) return page;
 
     return Stack(
       children: [
-        content,
-        Positioned.fill(
-          child: _PrecacheOverlay(progress: progress),
-        ),
+        page,
+        overlay,
       ],
     );
+  }
+
+  /// Resolves the metadata + cover art for [path] and starts playback.
+  Future<void> _playTrack(BuildContext context, String path) async {
+    final homeBloc = context.read<HomeBloc>();
+    final playerBloc = context.read<PlayerBloc>();
+
+    String? title;
+    String? artist;
+    Uint8List? coverArt;
+    try {
+      final metadata = await homeBloc.loadMetadata(path);
+      title = metadata?.title;
+      artist = metadata?.artist;
+    } catch (_) {}
+    try {
+      coverArt = await homeBloc.loadCoverArt(path);
+    } catch (_) {}
+
+    if (!context.mounted) return;
+    playerBloc.add(PlayRequested(
+      path: path,
+      title: title,
+      artist: artist,
+      coverArt: coverArt,
+    ));
   }
 
   Widget _buildRightPanel(BuildContext context, HomeState state) {
@@ -92,13 +145,18 @@ class HomePage extends StatelessWidget {
       loadMetadata: (path) => context.read<HomeBloc>().loadMetadata(path),
       pendingRenames: state.pendingRenames,
       pendingMetadataUpdates: state.pendingMetadataUpdates,
+      pendingDeletes: state.pendingDeletes,
       onSwap: (path) => context.read<HomeBloc>().add(SwapRequested(path)),
+      onDelete: (path) => context.read<HomeBloc>().add(DeleteRequested(path)),
+      onRestore: (path) => context.read<HomeBloc>().add(RestoreRequested(path)),
       onRename: (path, newName) =>
           context.read<HomeBloc>().add(RenameFileRequested(path, newName)),
       onSyncFromName: (path) =>
           context.read<HomeBloc>().add(SyncMetadataFromName(path)),
       onFileSelected: (path) =>
           context.read<HomeBloc>().add(FileSelected(path)),
+      onPlayTrack: (path) => _playTrack(context, path),
+      selectedFilePath: state.selectedFilePath,
       error: state.audioError,
       onRetry: () {
         final folder = state.selectedFolder;
@@ -108,19 +166,30 @@ class HomePage extends StatelessWidget {
       },
     );
 
-    if (state.selectedFilePath == null) return right;
+    final hasSelection = state.selectedFilePath != null;
 
+    // Keep the songs list at a stable position in the tree so its state (and
+    // scroll offset) survives opening and closing the detail panel.
     return ResizableSplit(
-      initialFraction: 0.6,
-      minFraction: 0.3,
-      maxFraction: 0.75,
+      initialFraction: hasSelection ? 0.6 : 1.0,
+      minFraction: hasSelection ? 0.3 : 0.9,
+      maxFraction: hasSelection ? 0.75 : 0.98,
       left: right,
-      right: SongDetailPanel(
-        status: state.metadataStatus,
-        metadata: state.selectedMetadata,
-        coverArt: state.selectedCoverArt,
-        onClose: () => context.read<HomeBloc>().add(const FileDetailClosed()),
-      ),
+      right: hasSelection
+          ? SongDetailPanel(
+              status: state.metadataStatus,
+              metadata: state.selectedMetadata,
+              coverArt: state.selectedCoverArt,
+              onClose: () =>
+                  context.read<HomeBloc>().add(const FileDetailClosed()),
+              onPlay: () {
+                final path = state.selectedFilePath;
+                if (path != null) {
+                  _playTrack(context, path);
+                }
+              },
+            )
+          : const SizedBox.shrink(),
     );
   }
 }
@@ -217,6 +286,65 @@ class _ErrorState extends StatelessWidget {
               label: const Text('Try again'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Windows 11 style loading card shown while applying pending changes.
+class _SavingOverlay extends StatelessWidget {
+  const _SavingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.4),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: colorScheme.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Saving changes…',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Please wait',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

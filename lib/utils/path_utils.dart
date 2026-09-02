@@ -32,20 +32,21 @@ String extensionFromPath(String path) {
   return (title: title, artist: artist);
 }
 
-/// Swaps the two parts of a file name around its single hyphen,
-/// returning the new full path. Returns null when the name does not
-/// contain exactly one hyphen.
+/// Swaps the two parts of a file name around its single " - " separator,
+/// returning the new full path. Returns null when the name does not contain
+/// exactly one " - " separator.
 String? swapNamePath(String path) {
   final name = nameWithoutExtension(path);
-  final firstIndex = name.indexOf('-');
-  if (firstIndex == -1 || name.indexOf('-', firstIndex + 1) != -1) {
+  final separator = name.lastIndexOf(' - ');
+  if (separator == -1) return null;
+  final title = name.substring(0, separator).trim();
+  final artist = name.substring(separator + 3).trim();
+  if (title.isEmpty || artist.isEmpty || artist.contains(' - ')) {
     return null;
   }
-  final first = name.substring(0, firstIndex).trim();
-  final second = name.substring(firstIndex + 1).trim();
   final extension = extensionFromPath(path);
   final dir = path.substring(0, path.length - nameFromPath(path).length);
-  final swapped = '$second - $first';
+  final swapped = '$artist - $title';
   return '$dir$swapped${extension.isEmpty ? '' : '.$extension'}';
 }
 

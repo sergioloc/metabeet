@@ -54,6 +54,26 @@ class SyncMetadataFromName extends HomeEvent {
   List<Object?> get props => [path];
 }
 
+/// Mark a file for deletion (applied on save).
+class DeleteRequested extends HomeEvent {
+  const DeleteRequested(this.path);
+
+  final String path;
+
+  @override
+  List<Object?> get props => [path];
+}
+
+/// Remove a file from the pending deletions.
+class RestoreRequested extends HomeEvent {
+  const RestoreRequested(this.path);
+
+  final String path;
+
+  @override
+  List<Object?> get props => [path];
+}
+
 /// Apply all pending renames and metadata updates.
 class SavePendingRenames extends HomeEvent {
   const SavePendingRenames();

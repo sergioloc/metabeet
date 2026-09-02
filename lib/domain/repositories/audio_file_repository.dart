@@ -23,4 +23,7 @@ abstract class AudioFileRepository {
   Future<void> renameFiles(List<FileRenameRequest> requests);
 
   Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests);
+
+  /// Permanently deletes the audio files at [paths].
+  Future<void> deleteFiles(List<String> paths);
 }

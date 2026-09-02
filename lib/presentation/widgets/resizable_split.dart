@@ -34,6 +34,16 @@ class _ResizableSplitState extends State<ResizableSplit> {
   }
 
   @override
+  void didUpdateWidget(ResizableSplit oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When configuring the split for a different layout (e.g. revealing or
+    // hiding the right panel), snap back to the requested initial fraction.
+    if (oldWidget.initialFraction != widget.initialFraction) {
+      _leftFraction = widget.initialFraction;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {

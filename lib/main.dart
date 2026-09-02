@@ -2,31 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'presentation/bloc/home/home_bloc.dart';
+import 'presentation/bloc/player/player_bloc.dart';
 import 'presentation/pages/home_page.dart';
 import 'utils/app_colors.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   final homeBloc = HomeBloc();
+  final playerBloc = PlayerBloc();
 
-  runApp(MetabeetApp(bloc: homeBloc));
+  runApp(MetabeetApp(bloc: homeBloc, playerBloc: playerBloc));
 }
 
 class MetabeetApp extends StatelessWidget {
-  const MetabeetApp({super.key, required this.bloc});
+  const MetabeetApp({
+    super.key,
+    required this.bloc,
+    required this.playerBloc,
+  });
 
   final HomeBloc bloc;
+  final PlayerBloc playerBloc;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider<HomeBloc>.value(
       value: bloc,
-      child: MaterialApp(
-        title: 'Metabeet',
-        debugShowCheckedModeBanner: false,
-        theme: _buildTheme(Brightness.light),
-        darkTheme: _buildTheme(Brightness.dark),
-        themeMode: ThemeMode.dark,
-        home: const HomePage(),
+      child: BlocProvider<PlayerBloc>.value(
+        value: playerBloc,
+        child: MaterialApp(
+          title: 'Metabeet',
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(Brightness.light),
+          darkTheme: _buildTheme(Brightness.dark),
+          themeMode: ThemeMode.dark,
+          home: const HomePage(),
+        ),
       ),
     );
   }

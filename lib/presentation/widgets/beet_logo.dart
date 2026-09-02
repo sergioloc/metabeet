@@ -8,7 +8,6 @@ import '../../utils/app_colors.dart';
 /// The source is a silhouette, so it is recolored to [AppColors.accent]. A
 /// small inset keeps the logo from touching the edges of its frame.
 class BeetLogo extends StatelessWidget {
-
   const BeetLogo({super.key, this.size = 28, this.color = AppColors.accent});
 
   final double size;

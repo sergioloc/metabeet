@@ -21,10 +21,15 @@ class AudioFilesView extends StatefulWidget {
     required this.loadMetadata,
     required this.pendingRenames,
     required this.pendingMetadataUpdates,
+    required this.pendingDeletes,
     required this.onSwap,
+    this.onDelete,
+    this.onRestore,
     this.onRename,
     this.onSyncFromName,
     this.onFileSelected,
+    this.onPlayTrack,
+    this.selectedFilePath,
     this.error,
     this.onRetry,
   });
@@ -36,10 +41,15 @@ class AudioFilesView extends StatefulWidget {
   final Future<AudioMetadataEntity?> Function(String path) loadMetadata;
   final Map<String, String> pendingRenames;
   final Map<String, MetadataUpdateRequest> pendingMetadataUpdates;
+  final Set<String> pendingDeletes;
   final void Function(String path) onSwap;
+  final void Function(String path)? onDelete;
+  final void Function(String path)? onRestore;
   final void Function(String path, String newName)? onRename;
   final void Function(String path)? onSyncFromName;
   final void Function(String path)? onFileSelected;
+  final void Function(String path)? onPlayTrack;
+  final String? selectedFilePath;
   final String? error;
   final VoidCallback? onRetry;
 
@@ -49,11 +59,14 @@ class AudioFilesView extends StatefulWidget {
 
 enum _Filter { all, mismatch, noPattern }
 
+enum _FormatFilter { all, mp3, wav, flac }
+
 class _AudioFilesViewState extends State<AudioFilesView> {
   final TextEditingController _searchController = TextEditingController();
   final Map<String, _SyncState> _syncStates = {};
   String _query = '';
   _Filter _selectedFilter = _Filter.all;
+  _FormatFilter _selectedFormat = _FormatFilter.all;
   int _syncLoadGeneration = 0;
 
   @override
@@ -123,15 +136,25 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                 extensionFromPath(file.path).toLowerCase().contains(q);
           }).toList();
 
+    final byFormat = switch (_selectedFormat) {
+      _FormatFilter.all => bySearch,
+      _FormatFilter.mp3 =>
+        bySearch.where((f) => f.format == AudioFormat.mp3).toList(),
+      _FormatFilter.wav =>
+        bySearch.where((f) => f.format == AudioFormat.wav).toList(),
+      _FormatFilter.flac =>
+        bySearch.where((f) => f.format == AudioFormat.flac).toList(),
+    };
+
     switch (_selectedFilter) {
       case _Filter.all:
-        return bySearch;
+        return byFormat;
       case _Filter.mismatch:
-        return bySearch
+        return byFormat
             .where((f) => _syncStates[f.path] == _SyncState.mismatch)
             .toList();
       case _Filter.noPattern:
-        return bySearch
+        return byFormat
             .where((f) => _syncStates[f.path] == _SyncState.noPattern)
             .toList();
     }
@@ -201,9 +224,25 @@ class _AudioFilesViewState extends State<AudioFilesView> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: _FilterBar(
+                items: [
+                  const _FilterItem.all(),
+                  const _FilterItem(
+                      label: 'Mismatches', value: _Filter.mismatch),
+                  const _FilterItem(
+                      label: 'Wrong format', value: _Filter.noPattern),
+                ],
                 selected: _selectedFilter,
                 onSelected: (filter) {
                   setState(() => _selectedFilter = filter);
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: _FormatFilterBar(
+                selected: _selectedFormat,
+                onSelected: (format) {
+                  setState(() => _selectedFormat = format);
                 },
               ),
             ),
@@ -276,6 +315,8 @@ class _AudioFilesViewState extends State<AudioFilesView> {
             final file = files[index];
             return _TrackTile(
               file: file,
+              isPendingDelete: widget.pendingDeletes.contains(file.path),
+              isSelected: widget.selectedFilePath == file.path,
               displayName: nameWithoutExtension(
                   widget.pendingRenames[file.path] ?? file.path),
               syncState: _syncStates[file.path] ?? _SyncState.pending,
@@ -283,6 +324,9 @@ class _AudioFilesViewState extends State<AudioFilesView> {
               isPendingSync:
                   widget.pendingMetadataUpdates.containsKey(file.path),
               loadCoverArt: widget.loadCoverArt,
+              onPlay: widget.onPlayTrack == null
+                  ? null
+                  : () => widget.onPlayTrack!(file.path),
               onTapReplace: widget.onFileSelected == null
                   ? null
                   : () => widget.onFileSelected!(file.path),
@@ -297,6 +341,12 @@ class _AudioFilesViewState extends State<AudioFilesView> {
                   ? () => widget.onSyncFromName!(file.path)
                   : null,
               onSwap: () => widget.onSwap(file.path),
+              onDelete: widget.onDelete == null
+                  ? null
+                  : () => widget.onDelete!(file.path),
+              onRestore: widget.onRestore == null
+                  ? null
+                  : () => widget.onRestore!(file.path),
             );
           },
         );
@@ -406,12 +456,90 @@ class _FileCountBadge extends StatelessWidget {
   }
 }
 
+/// Describes one pill in the sync/type filter bar.
+class _FilterItem {
+  const _FilterItem.all()
+      : label = 'All',
+        value = _Filter.all;
+
+  const _FilterItem({required this.label, required this.value});
+
+  final String label;
+  final _Filter value;
+}
+
 /// Windows 11 style filter: segmented pills inside a rounded container.
 class _FilterBar extends StatelessWidget {
-  const _FilterBar({required this.selected, required this.onSelected});
+  const _FilterBar({
+    required this.items,
+    required this.selected,
+    required this.onSelected,
+  });
 
+  final List<_FilterItem> items;
   final _Filter selected;
   final ValueChanged<_Filter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FilterBarContainer(
+      children: [
+        for (var i = 0; i < items.length; i++)
+          _FilterPill(
+            label: items[i].label,
+            selected: selected == items[i].value,
+            margin: EdgeInsets.only(left: i == 0 ? 0 : 3),
+            onTap: () => onSelected(items[i].value),
+          ),
+      ],
+    );
+  }
+}
+
+/// Windows 11 style filter for the audio file format (mp3/wav/flac).
+class _FormatFilterBar extends StatelessWidget {
+  const _FormatFilterBar({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _FormatFilter selected;
+  final ValueChanged<_FormatFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FilterBarContainer(
+      children: [
+        for (var i = 0; i < _FormatFilter.values.length; i++)
+          _FilterPill(
+            label: _label(_FormatFilter.values[i]),
+            selected: selected == _FormatFilter.values[i],
+            margin: EdgeInsets.only(left: i == 0 ? 0 : 3),
+            onTap: () => onSelected(_FormatFilter.values[i]),
+          ),
+      ],
+    );
+  }
+
+  String _label(_FormatFilter format) {
+    switch (format) {
+      case _FormatFilter.all:
+        return 'All formats';
+      case _FormatFilter.mp3:
+        return 'MP3';
+      case _FormatFilter.wav:
+        return 'WAV';
+      case _FormatFilter.flac:
+        return 'FLAC';
+    }
+  }
+}
+
+/// Shared visual container for the segmented filter pill bars.
+class _FilterBarContainer extends StatelessWidget {
+  const _FilterBarContainer({required this.children});
+
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
@@ -423,30 +551,11 @@ class _FilterBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < _Filter.values.length; i++)
-            _FilterPill(
-              label: _label(_Filter.values[i]),
-              selected: selected == _Filter.values[i],
-              margin: EdgeInsets.only(left: i == 0 ? 0 : 3),
-              onTap: () => onSelected(_Filter.values[i]),
-            ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(mainAxisSize: MainAxisSize.min, children: children),
       ),
     );
-  }
-
-  String _label(_Filter filter) {
-    switch (filter) {
-      case _Filter.all:
-        return 'All';
-      case _Filter.mismatch:
-        return 'Mismatches';
-      case _Filter.noPattern:
-        return 'Wrong format';
-    }
   }
 }
 
@@ -537,11 +646,16 @@ class _TrackTile extends StatefulWidget {
     required this.syncState,
     required this.isPendingSwap,
     required this.isPendingSync,
+    required this.isPendingDelete,
+    this.isSelected = false,
     required this.loadCoverArt,
     required this.onTapReplace,
     required this.onSecondaryTap,
     required this.onSync,
     required this.onSwap,
+    this.onPlay,
+    this.onDelete,
+    this.onRestore,
   });
 
   final AudioFileEntity file;
@@ -549,11 +663,16 @@ class _TrackTile extends StatefulWidget {
   final _SyncState syncState;
   final bool isPendingSwap;
   final bool isPendingSync;
+  final bool isPendingDelete;
+  final bool isSelected;
   final Future<Uint8List?> Function(String path) loadCoverArt;
   final VoidCallback? onTapReplace;
   final void Function(TapDownDetails details) onSecondaryTap;
   final VoidCallback? onSync;
   final VoidCallback onSwap;
+  final VoidCallback? onPlay;
+  final VoidCallback? onDelete;
+  final VoidCallback? onRestore;
 
   @override
   State<_TrackTile> createState() => _TrackTileState();
@@ -567,11 +686,16 @@ class _TrackTileState extends State<_TrackTile> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final file = widget.file;
-    final hasSingleDash = widget.displayName.split('-').length - 1 == 1;
+    final isPendingDelete = widget.isPendingDelete;
+    final hasSingleDash = widget.displayName.split(' - ').length - 1 == 1;
 
     final Color rowColor = _hovered
         ? colorScheme.onSurface.withValues(alpha: 0.045)
         : Colors.transparent;
+
+    final bool showSelection = widget.isSelected && !isPendingDelete;
+    final Color selectionColor =
+        showSelection ? colorScheme.primary.withValues(alpha: 0.14) : rowColor;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -579,62 +703,105 @@ class _TrackTileState extends State<_TrackTile> {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 1),
         child: GestureDetector(
-          onTap: widget.onTapReplace,
-          onSecondaryTapDown: widget.onSecondaryTap,
+          onTap: isPendingDelete ? null : widget.onTapReplace,
+          onSecondaryTapDown: isPendingDelete ? null : widget.onSecondaryTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              color: rowColor,
+              color: isPendingDelete
+                  ? colorScheme.errorContainer.withValues(alpha: 0.25)
+                  : selectionColor,
               borderRadius: BorderRadius.circular(6),
+              border: isPendingDelete
+                  ? Border.all(
+                      color: colorScheme.error.withValues(alpha: 0.35),
+                    )
+                  : showSelection
+                      ? Border.all(
+                          color: colorScheme.primary.withValues(alpha: 0.4),
+                        )
+                      : null,
             ),
             child: Row(
               children: [
-                _TrackArtwork(
-                    path: file.path, loadCoverArt: widget.loadCoverArt),
+                Opacity(
+                  opacity: isPendingDelete ? 0.45 : 1,
+                  child: _TrackArtwork(
+                    path: file.path,
+                    loadCoverArt: widget.loadCoverArt,
+                    onPlay: widget.onPlay,
+                  ),
+                ),
                 const SizedBox(width: 12),
-                _FormatChip(
-                  format: file.format,
-                  extension: extensionFromPath(file.path),
+                Opacity(
+                  opacity: isPendingDelete ? 0.45 : 1,
+                  child: _FormatChip(
+                    format: file.format,
+                    extension: extensionFromPath(file.path),
+                  ),
                 ),
                 const SizedBox(width: 10),
-                _SyncBadge(state: widget.syncState),
+                Opacity(
+                  opacity: isPendingDelete ? 0.45 : 1,
+                  child: _SyncBadge(state: widget.syncState),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    widget.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      fontWeight: widget.isPendingSwap
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      color: widget.isPendingSwap
-                          ? colorScheme.primary
-                          : colorScheme.onSurface,
+                  child: Opacity(
+                    opacity: isPendingDelete ? 0.55 : 1,
+                    child: Text(
+                      widget.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        fontWeight: widget.isPendingSwap
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                        color: widget.isPendingSwap
+                            ? colorScheme.primary
+                            : colorScheme.onSurface,
+                        decoration:
+                            isPendingDelete ? TextDecoration.lineThrough : null,
+                      ),
                     ),
                   ),
                 ),
-                if (widget.onSync != null || widget.isPendingSync)
+                if (isPendingDelete) ...[
                   _TrackAction(
-                    icon: Icons.sync_rounded,
-                    tooltip: widget.isPendingSync
-                        ? 'Undo metadata update'
-                        : 'Update metadata from file name',
-                    color: widget.isPendingSync
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                    onPressed: widget.onSync,
+                    icon: Icons.restore_rounded,
+                    tooltip: 'Restore',
+                    color: colorScheme.onSurfaceVariant,
+                    onPressed: widget.onRestore,
                   ),
-                if (hasSingleDash)
+                ] else ...[
+                  if (widget.onSync != null || widget.isPendingSync)
+                    _TrackAction(
+                      icon: Icons.sync_rounded,
+                      tooltip: widget.isPendingSync
+                          ? 'Undo metadata update'
+                          : 'Update metadata from file name',
+                      color: widget.isPendingSync
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                      onPressed: widget.onSync,
+                    ),
+                  if (hasSingleDash)
+                    _TrackAction(
+                      icon: Icons.swap_horiz_rounded,
+                      tooltip: widget.isPendingSwap ? 'Undo' : 'Swap',
+                      color: widget.isPendingSwap
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                      onPressed: widget.onSwap,
+                    ),
                   _TrackAction(
-                    icon: Icons.swap_horiz_rounded,
-                    tooltip: widget.isPendingSwap ? 'Undo' : 'Swap',
-                    color: widget.isPendingSwap
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                    onPressed: widget.onSwap,
+                    icon: Icons.close_rounded,
+                    tooltip: 'Delete',
+                    color: colorScheme.onSurfaceVariant,
+                    onPressed: widget.onDelete,
                   ),
+                ],
               ],
             ),
           ),
@@ -702,12 +869,18 @@ class _TrackAction extends StatelessWidget {
   }
 }
 
-/// Shows the track's embedded cover art, or a music icon as fallback.
+/// Shows the track's embedded cover art, or a music icon as fallback. When
+/// [onPlay] is provided, hovering reveals a play button overlay.
 class _TrackArtwork extends StatefulWidget {
-  const _TrackArtwork({required this.path, required this.loadCoverArt});
+  const _TrackArtwork({
+    required this.path,
+    required this.loadCoverArt,
+    this.onPlay,
+  });
 
   final String path;
   final Future<Uint8List?> Function(String path) loadCoverArt;
+  final VoidCallback? onPlay;
 
   @override
   State<_TrackArtwork> createState() => _TrackArtworkState();
@@ -718,6 +891,7 @@ class _TrackArtworkState extends State<_TrackArtwork> {
 
   Uint8List? _bytes;
   bool _loaded = false;
+  bool _hovered = false;
 
   @override
   void initState() {
@@ -755,27 +929,58 @@ class _TrackArtworkState extends State<_TrackArtwork> {
     );
   }
 
+  Widget _buildImage(BuildContext context, Uint8List bytes) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Image.memory(
+        bytes,
+        width: _size,
+        height: _size,
+        fit: BoxFit.cover,
+        cacheWidth: 72,
+        cacheHeight: 72,
+        errorBuilder: (context, error, stackTrace) =>
+            _placeholder(context, showNote: true),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bytes = _bytes;
-    if (bytes != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: Image.memory(
-          bytes,
+    final Widget base = bytes != null
+        ? _buildImage(context, bytes)
+        : _placeholder(context, showNote: _loaded);
+
+    final onPlay = widget.onPlay;
+    if (onPlay == null) return base;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: onPlay,
+        child: SizedBox(
           width: _size,
           height: _size,
-          fit: BoxFit.cover,
-          cacheWidth: 72,
-          cacheHeight: 72,
-          errorBuilder: (context, error, stackTrace) =>
-              _placeholder(context, showNote: true),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              base,
+              if (_hovered)
+                ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  child: Icon(
+                    Icons.play_arrow_rounded,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+            ],
+          ),
         ),
-      );
-    }
-    // While loading: plain gray box. Once confirmed there is no cover art,
-    // show the music note.
-    return _placeholder(context, showNote: _loaded);
+      ),
+    );
   }
 }
 

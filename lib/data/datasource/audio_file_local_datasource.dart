@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter/foundation.dart';
@@ -34,6 +35,9 @@ abstract class AudioFileLocalDataSource {
   Future<void> renameFiles(List<FileRenameRequest> requests);
 
   Future<void> updateMetadataFromFiles(List<MetadataUpdateRequest> requests);
+
+  /// Permanently deletes the audio files at [paths], removing any cached data.
+  Future<void> deleteFiles(List<String> paths);
 }
 
 /// Reads audio files and their cover art off the UI thread, caching every
@@ -259,7 +263,7 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
       try {
         final metadata = readMetadata(File(path), getImage: true);
         final artist = _hasCustomArtist(format)
-            ? _resolveArtist(path, format)
+            ? _resolveArtist(path, format, metadata.artist)
             : metadata.artist;
         final duration = metadata.duration;
         final pictures = metadata.pictures;
@@ -352,6 +356,14 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
             'Metadata writing is not supported for ${request.path}',
           );
         }
+        if (format == AudioFormat.wav) {
+          _writeWavMetadata(
+            File(request.path),
+            title: request.title,
+            artist: request.artist,
+          );
+          continue;
+        }
         updateMetadata(File(request.path), (metadata) {
           metadata
             ..setTitle(request.title)
@@ -365,6 +377,19 @@ class AudioFileLocalDataSourceImpl implements AudioFileLocalDataSource {
       _coverArtCache.remove(request.path);
     }
   }
+
+  @override
+  Future<void> deleteFiles(List<String> paths) async {
+    final existing = <String>[];
+    for (final path in paths) {
+      if (File(path).existsSync()) existing.add(path);
+    }
+    for (final path in existing) {
+      File(path).deleteSync();
+      _metadataCache.remove(path);
+      _coverArtCache.remove(path);
+    }
+  }
 }
 
 /// Whether [format] supports writing metadata via `updateMetadata`.
@@ -374,15 +399,197 @@ bool _isWritable(AudioFormat format) =>
     format == AudioFormat.wav ||
     format == AudioFormat.m4a;
 
+/// Rewrites a WAV file's metadata, storing [title] and [artist] in an
+/// `LIST/INFO` chunk (INAM/IART).
+///
+/// The upstream `RiffWriter` mishandles large `data` chunks (it builds a full
+/// in-memory copy of the file and can throw on big WAVs). This implementation
+/// streams chunk-by-chunk with a bounded buffer and writes to a temporary file
+/// that atomically replaces the original, so a large WAV neither crashes the
+/// app nor risks being left corrupted.
+void _writeWavMetadata(
+  File file, {
+  required String? title,
+  required String? artist,
+}) {
+  final infoData = BytesBuilder();
+  if (title != null && title.trim().isNotEmpty) {
+    _writeWavInfoSubchunk(infoData, 'INAM', title);
+  }
+  if (artist != null && artist.trim().isNotEmpty) {
+    _writeWavInfoSubchunk(infoData, 'IART', artist);
+  }
+  final infoBytes = infoData.takeBytes();
+  if (infoBytes.isEmpty) return;
+
+  final tmp = File('${file.path}.metabeet.tmp');
+  final input = file.openSync();
+  final output = tmp.openSync(mode: FileMode.write);
+  var outputOpen = true;
+
+  // ISO-8859-1 is what WAV INFO chunks use for human-readable text.
+  const latin1 = AsciiCodec(allowInvalid: true);
+  final infoChunk = infoBytes;
+  final chunkHeader = Uint8List(8);
+  var bodyBytes = 0; // bytes written after the 12-byte RIFF header
+  var infoWritten = false;
+
+  try {
+    final headerBuf = Uint8List(12);
+    final headerRead = input.readIntoSync(headerBuf);
+    if (headerRead < 12 ||
+        latin1.decode(headerBuf.sublist(0, 4)) != 'RIFF' ||
+        latin1.decode(headerBuf.sublist(8, 12)) != 'WAVE') {
+      throw StateError('Not a RIFF/WAVE file: ${file.path}');
+    }
+
+    // Write the header now; the RIFF size field is patched at the end once the
+    // total body length is known.
+    output.writeFromSync(headerBuf);
+
+    while (true) {
+      final read = input.readIntoSync(chunkHeader);
+      if (read == 0) break;
+      if (read < 8) {
+        output.writeFromSync(chunkHeader, 0, read);
+        bodyBytes += read;
+        break;
+      }
+      final id = latin1.decode(chunkHeader.sublist(0, 4));
+      final size = _readUint32LE(chunkHeader, 4);
+
+      if (id == 'LIST') {
+        if (!infoWritten) {
+          // Replace the first LIST with our fresh INFO list and skip the old
+          // payload (including any trailing LIST/INFO the source may have).
+          final payload = BytesBuilder()
+            ..add(ascii.encode('INFO'))
+            ..add(infoChunk);
+          final chunkSize = payload.length;
+          output.writeFromSync(ascii.encode('LIST'));
+          output.writeFromSync(_uint32LE(chunkSize));
+          output.writeFromSync(payload.takeBytes());
+          bodyBytes += 8 + chunkSize;
+          if (chunkSize.isOdd) {
+            output.writeByteSync(0);
+            bodyBytes += 1;
+          }
+          if (size >= 4) {
+            _skipWavInput(input, size - 4);
+            if ((size - 4).isOdd) {
+              _skipWavInput(input, 1); // padding byte
+            }
+          }
+          infoWritten = true;
+        } else {
+          // Duplicate LIST in the source: skip it verbatim.
+          _skipWavInput(input, size);
+          if (size.isOdd) _skipWavInput(input, 1);
+        }
+      } else {
+        output.writeFromSync(chunkHeader);
+        bodyBytes += 8;
+        bodyBytes += _copyWavPayload(input, output, size);
+      }
+    }
+
+    // No LIST was found: append our INFO list at the end.
+    if (!infoWritten) {
+      final payload = BytesBuilder()
+        ..add(ascii.encode('INFO'))
+        ..add(infoChunk);
+      final chunkSize = payload.length;
+      output.writeFromSync(ascii.encode('LIST'));
+      output.writeFromSync(_uint32LE(chunkSize));
+      output.writeFromSync(payload.takeBytes());
+      bodyBytes += 8 + chunkSize;
+      if (chunkSize.isOdd) {
+        output.writeByteSync(0);
+      }
+    }
+
+    // Patch RIFF chunk size = file size - 8 = bodyBytes + 4.
+    output.setPositionSync(4);
+    output.writeFromSync(_uint32LE(bodyBytes + 4));
+    output.flushSync();
+  } finally {
+    input.closeSync();
+    if (outputOpen) {
+      outputOpen = false;
+      output.closeSync();
+    }
+  }
+
+  tmp.renameSync(file.path);
+}
+
+/// Appends an INFO subchunk (id, size, data, padding) to [builder].
+void _writeWavInfoSubchunk(BytesBuilder builder, String id, String text) {
+  final value = const AsciiCodec(allowInvalid: true).encode(text);
+  builder.add(ascii.encode(id));
+  builder.add(_uint32LE(value.length));
+  builder.add(value);
+  if (value.length.isOdd) {
+    builder.addByte(0);
+  }
+}
+
+/// Streams [size] bytes from [input] to [output] in bounded reads, returning
+/// the number of body bytes written (payload + padding byte when odd).
+int _copyWavPayload(RandomAccessFile input, RandomAccessFile output, int size) {
+  final buffer = Uint8List(65536);
+  var remaining = size;
+  var written = 0;
+  while (remaining > 0) {
+    final chunk = remaining < buffer.length ? remaining : buffer.length;
+    final read = input.readIntoSync(buffer, 0, chunk);
+    if (read == 0) break; // truncated file
+    output.writeFromSync(buffer, 0, read);
+    written += read;
+    remaining -= read;
+    if (remaining == 0 && size.isOdd) {
+      output.writeByteSync(0);
+      written += 1;
+    }
+  }
+  return written;
+}
+
+void _skipWavInput(RandomAccessFile input, int bytes) {
+  if (bytes <= 0) return;
+  final buffer = Uint8List(65536);
+  var remaining = bytes;
+  while (remaining > 0) {
+    final chunk = remaining < buffer.length ? remaining : buffer.length;
+    final read = input.readIntoSync(buffer, 0, chunk);
+    if (read == 0) break;
+    remaining -= read;
+  }
+}
+
+Uint8List _uint32LE(int value) {
+  return Uint8List.fromList([
+    value & 0xff,
+    (value >> 8) & 0xff,
+    (value >> 16) & 0xff,
+    (value >> 24) & 0xff,
+  ]);
+}
+
 /// Resolves the artist to use for a file.
 ///
 /// For MP3 the track artist (TPE1) is used, both for display and for the sync
-/// check. For FLAC/OGG the album artist tag is preferred, but `readMetadata`
-/// merges `ARTIST` and `ALBUMARTIST` into a single list so the raw Vorbis
-/// comments are read to isolate the album artist. The value is trimmed, and an
-/// empty value resolves to null. Returns null when the format has no dedicated
-/// artist tag.
-String? _resolveArtist(String path, AudioFormat format) {
+/// check. For FLAC/OGG the album artist tag is preferred (as `readMetadata`
+/// merges `ARTIST` and `ALBUMARTIST` into a single list, the raw Vorbis
+/// comments are read to isolate the album artist); when no album artist tag is
+/// present the track artist read by [fallbackArtist] is used instead. The value
+/// is trimmed, and an empty value resolves to null. Returns null when the
+/// format has no dedicated artist tag.
+String? _resolveArtist(
+  String path,
+  AudioFormat format,
+  String? fallbackArtist,
+) {
   switch (format) {
     case AudioFormat.mp3:
       try {
@@ -396,7 +603,10 @@ String? _resolveArtist(String path, AudioFormat format) {
       return null;
     case AudioFormat.flac:
     case AudioFormat.ogg:
-      return _vorbisAlbumArtist(path);
+      final albumArtist = _vorbisAlbumArtist(path);
+      if (albumArtist != null && albumArtist.isNotEmpty) return albumArtist;
+      final fallback = fallbackArtist?.trim();
+      return fallback == null || fallback.isEmpty ? null : fallback;
     default:
       return null;
   }
@@ -487,7 +697,7 @@ List<Map<String, Object?>> _readBatch(List<String> paths) {
     try {
       final metadata = readMetadata(File(path), getImage: true);
       final artist = _hasCustomArtist(format)
-          ? _resolveArtist(path, format)
+          ? _resolveArtist(path, format, metadata.artist)
           : metadata.artist;
       final duration = metadata.duration;
       final pictures = metadata.pictures;
