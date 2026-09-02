@@ -13,12 +13,14 @@ class SongDetailPanel extends StatelessWidget {
     required this.status,
     required this.metadata,
     required this.onClose,
+    this.onPlay,
     this.coverArt,
   });
 
   final MetadataStatus status;
   final AudioMetadataEntity? metadata;
   final VoidCallback onClose;
+  final VoidCallback? onPlay;
   final Uint8List? coverArt;
 
   @override
@@ -100,6 +102,7 @@ class SongDetailPanel extends StatelessWidget {
               child: _CoverArt(
                 bytes: coverArt ?? meta.coverArt,
                 format: meta.format,
+                onPlay: onPlay,
               ),
             ),
             const SizedBox(height: 18),
@@ -176,10 +179,11 @@ class SongDetailPanel extends StatelessWidget {
 }
 
 class _CoverArt extends StatelessWidget {
-  const _CoverArt({required this.bytes, required this.format});
+  const _CoverArt({required this.bytes, required this.format, this.onPlay});
 
   final Uint8List? bytes;
   final AudioFormat format;
+  final VoidCallback? onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -208,20 +212,95 @@ class _CoverArt extends StatelessWidget {
   Widget _buildInner(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final data = bytes;
+    final Widget base;
     if (data == null) {
-      return Icon(
+      base = Icon(
         Icons.music_note_rounded,
         size: 72,
         color: colorScheme.onSurfaceVariant,
       );
+    } else {
+      base = Image.memory(
+        data,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Icon(
+          Icons.music_note_rounded,
+          size: 72,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      );
     }
-    return Image.memory(
-      data,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => Icon(
-        Icons.music_note_rounded,
-        size: 72,
-        color: colorScheme.onSurfaceVariant,
+
+    final play = onPlay;
+    if (play == null) return base;
+
+    return _HoverPlayOverlay(
+      onPlay: play,
+      iconSize: 40,
+      child: base,
+    );
+  }
+}
+
+/// Wraps a cover [child] and overlays a play button while hovered.
+class _HoverPlayOverlay extends StatefulWidget {
+  const _HoverPlayOverlay({
+    required this.onPlay,
+    required this.iconSize,
+    required this.child,
+  });
+
+  final VoidCallback onPlay;
+  final double iconSize;
+  final Widget child;
+
+  @override
+  State<_HoverPlayOverlay> createState() => _HoverPlayOverlayState();
+}
+
+class _HoverPlayOverlayState extends State<_HoverPlayOverlay> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onPlay,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            widget.child,
+            if (_hovered)
+              ColoredBox(
+                color: Colors.black.withValues(alpha: 0.4),
+                child: Center(
+                  child: Container(
+                    width: widget.iconSize + 18,
+                    height: widget.iconSize + 18,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      size: widget.iconSize,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -28,6 +28,7 @@ class AudioFilesView extends StatefulWidget {
     this.onRename,
     this.onSyncFromName,
     this.onFileSelected,
+    this.onPlayTrack,
     this.selectedFilePath,
     this.error,
     this.onRetry,
@@ -47,6 +48,7 @@ class AudioFilesView extends StatefulWidget {
   final void Function(String path, String newName)? onRename;
   final void Function(String path)? onSyncFromName;
   final void Function(String path)? onFileSelected;
+  final void Function(String path)? onPlayTrack;
   final String? selectedFilePath;
   final String? error;
   final VoidCallback? onRetry;
@@ -322,6 +324,9 @@ class _AudioFilesViewState extends State<AudioFilesView> {
               isPendingSync:
                   widget.pendingMetadataUpdates.containsKey(file.path),
               loadCoverArt: widget.loadCoverArt,
+              onPlay: widget.onPlayTrack == null
+                  ? null
+                  : () => widget.onPlayTrack!(file.path),
               onTapReplace: widget.onFileSelected == null
                   ? null
                   : () => widget.onFileSelected!(file.path),
@@ -648,6 +653,7 @@ class _TrackTile extends StatefulWidget {
     required this.onSecondaryTap,
     required this.onSync,
     required this.onSwap,
+    this.onPlay,
     this.onDelete,
     this.onRestore,
   });
@@ -664,6 +670,7 @@ class _TrackTile extends StatefulWidget {
   final void Function(TapDownDetails details) onSecondaryTap;
   final VoidCallback? onSync;
   final VoidCallback onSwap;
+  final VoidCallback? onPlay;
   final VoidCallback? onDelete;
   final VoidCallback? onRestore;
 
@@ -723,6 +730,7 @@ class _TrackTileState extends State<_TrackTile> {
                   child: _TrackArtwork(
                     path: file.path,
                     loadCoverArt: widget.loadCoverArt,
+                    onPlay: widget.onPlay,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -861,12 +869,18 @@ class _TrackAction extends StatelessWidget {
   }
 }
 
-/// Shows the track's embedded cover art, or a music icon as fallback.
+/// Shows the track's embedded cover art, or a music icon as fallback. When
+/// [onPlay] is provided, hovering reveals a play button overlay.
 class _TrackArtwork extends StatefulWidget {
-  const _TrackArtwork({required this.path, required this.loadCoverArt});
+  const _TrackArtwork({
+    required this.path,
+    required this.loadCoverArt,
+    this.onPlay,
+  });
 
   final String path;
   final Future<Uint8List?> Function(String path) loadCoverArt;
+  final VoidCallback? onPlay;
 
   @override
   State<_TrackArtwork> createState() => _TrackArtworkState();
@@ -877,6 +891,7 @@ class _TrackArtworkState extends State<_TrackArtwork> {
 
   Uint8List? _bytes;
   bool _loaded = false;
+  bool _hovered = false;
 
   @override
   void initState() {
@@ -914,27 +929,58 @@ class _TrackArtworkState extends State<_TrackArtwork> {
     );
   }
 
+  Widget _buildImage(BuildContext context, Uint8List bytes) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Image.memory(
+        bytes,
+        width: _size,
+        height: _size,
+        fit: BoxFit.cover,
+        cacheWidth: 72,
+        cacheHeight: 72,
+        errorBuilder: (context, error, stackTrace) =>
+            _placeholder(context, showNote: true),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bytes = _bytes;
-    if (bytes != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: Image.memory(
-          bytes,
+    final Widget base = bytes != null
+        ? _buildImage(context, bytes)
+        : _placeholder(context, showNote: _loaded);
+
+    final onPlay = widget.onPlay;
+    if (onPlay == null) return base;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: onPlay,
+        child: SizedBox(
           width: _size,
           height: _size,
-          fit: BoxFit.cover,
-          cacheWidth: 72,
-          cacheHeight: 72,
-          errorBuilder: (context, error, stackTrace) =>
-              _placeholder(context, showNote: true),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              base,
+              if (_hovered)
+                ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  child: Icon(
+                    Icons.play_arrow_rounded,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+            ],
+          ),
         ),
-      );
-    }
-    // While loading: plain gray box. Once confirmed there is no cover art,
-    // show the music note.
-    return _placeholder(context, showNote: _loaded);
+      ),
+    );
   }
 }
 

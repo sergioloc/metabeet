@@ -1,12 +1,16 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/precache_progress.dart';
 import '../bloc/home/home_bloc.dart';
+import '../bloc/player/player_bloc.dart';
 import '../widgets/app_toolbar.dart';
 import '../widgets/audio_files_view.dart';
 import '../widgets/beet_logo.dart';
 import '../widgets/folder_tree_view.dart';
+import '../widgets/player_bar.dart';
 import '../widgets/resizable_split.dart';
 import '../widgets/song_detail_panel.dart';
 
@@ -72,9 +76,18 @@ class HomePage extends StatelessWidget {
         ),
     };
 
+    // The player bar spans the full width beneath the main content, and
+    // collapses to nothing when no track is loaded.
+    final page = Column(
+      children: [
+        Expanded(child: content),
+        const PlayerBar(),
+      ],
+    );
+
     final progress = state.precacheProgress;
     final showSaving = state.isSaving;
-    if (progress == null && !showSaving) return content;
+    if (progress == null && !showSaving) return page;
 
     final Widget? overlay;
     if (state.isSaving) {
@@ -84,14 +97,40 @@ class HomePage extends StatelessWidget {
     } else {
       overlay = null;
     }
-    if (overlay == null) return content;
+    if (overlay == null) return page;
 
     return Stack(
       children: [
-        content,
+        page,
         overlay,
       ],
     );
+  }
+
+  /// Resolves the metadata + cover art for [path] and starts playback.
+  Future<void> _playTrack(BuildContext context, String path) async {
+    final homeBloc = context.read<HomeBloc>();
+    final playerBloc = context.read<PlayerBloc>();
+
+    String? title;
+    String? artist;
+    Uint8List? coverArt;
+    try {
+      final metadata = await homeBloc.loadMetadata(path);
+      title = metadata?.title;
+      artist = metadata?.artist;
+    } catch (_) {}
+    try {
+      coverArt = await homeBloc.loadCoverArt(path);
+    } catch (_) {}
+
+    if (!context.mounted) return;
+    playerBloc.add(PlayRequested(
+      path: path,
+      title: title,
+      artist: artist,
+      coverArt: coverArt,
+    ));
   }
 
   Widget _buildRightPanel(BuildContext context, HomeState state) {
@@ -113,6 +152,7 @@ class HomePage extends StatelessWidget {
           context.read<HomeBloc>().add(SyncMetadataFromName(path)),
       onFileSelected: (path) =>
           context.read<HomeBloc>().add(FileSelected(path)),
+      onPlayTrack: (path) => _playTrack(context, path),
       selectedFilePath: state.selectedFilePath,
       error: state.audioError,
       onRetry: () {
@@ -139,6 +179,12 @@ class HomePage extends StatelessWidget {
               coverArt: state.selectedCoverArt,
               onClose: () =>
                   context.read<HomeBloc>().add(const FileDetailClosed()),
+              onPlay: () {
+                final path = state.selectedFilePath;
+                if (path != null) {
+                  _playTrack(context, path);
+                }
+              },
             )
           : const SizedBox.shrink(),
     );
