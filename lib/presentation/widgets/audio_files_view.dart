@@ -592,7 +592,7 @@ class _TrackTileState extends State<_TrackTile> {
     final textTheme = Theme.of(context).textTheme;
     final file = widget.file;
     final isPendingDelete = widget.isPendingDelete;
-    final hasSingleDash = widget.displayName.split('-').length - 1 == 1;
+    final hasSingleDash = widget.displayName.split(' - ').length - 1 == 1;
 
     final Color rowColor = _hovered
         ? colorScheme.onSurface.withValues(alpha: 0.045)
