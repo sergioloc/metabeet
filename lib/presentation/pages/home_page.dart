@@ -104,6 +104,7 @@ class HomePage extends StatelessWidget {
           context.read<HomeBloc>().add(SyncMetadataFromName(path)),
       onFileSelected: (path) =>
           context.read<HomeBloc>().add(FileSelected(path)),
+      selectedFilePath: state.selectedFilePath,
       error: state.audioError,
       onRetry: () {
         final folder = state.selectedFolder;

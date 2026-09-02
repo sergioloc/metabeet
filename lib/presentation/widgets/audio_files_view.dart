@@ -28,6 +28,7 @@ class AudioFilesView extends StatefulWidget {
     this.onRename,
     this.onSyncFromName,
     this.onFileSelected,
+    this.selectedFilePath,
     this.error,
     this.onRetry,
   });
@@ -46,6 +47,7 @@ class AudioFilesView extends StatefulWidget {
   final void Function(String path, String newName)? onRename;
   final void Function(String path)? onSyncFromName;
   final void Function(String path)? onFileSelected;
+  final String? selectedFilePath;
   final String? error;
   final VoidCallback? onRetry;
 
@@ -283,6 +285,7 @@ class _AudioFilesViewState extends State<AudioFilesView> {
             return _TrackTile(
               file: file,
               isPendingDelete: widget.pendingDeletes.contains(file.path),
+              isSelected: widget.selectedFilePath == file.path,
               displayName: nameWithoutExtension(
                   widget.pendingRenames[file.path] ?? file.path),
               syncState: _syncStates[file.path] ?? _SyncState.pending,
@@ -551,6 +554,7 @@ class _TrackTile extends StatefulWidget {
     required this.isPendingSwap,
     required this.isPendingSync,
     required this.isPendingDelete,
+    this.isSelected = false,
     required this.loadCoverArt,
     required this.onTapReplace,
     required this.onSecondaryTap,
@@ -566,6 +570,7 @@ class _TrackTile extends StatefulWidget {
   final bool isPendingSwap;
   final bool isPendingSync;
   final bool isPendingDelete;
+  final bool isSelected;
   final Future<Uint8List?> Function(String path) loadCoverArt;
   final VoidCallback? onTapReplace;
   final void Function(TapDownDetails details) onSecondaryTap;
@@ -593,6 +598,10 @@ class _TrackTileState extends State<_TrackTile> {
         ? colorScheme.onSurface.withValues(alpha: 0.045)
         : Colors.transparent;
 
+    final bool showSelection = widget.isSelected && !isPendingDelete;
+    final Color selectionColor =
+        showSelection ? colorScheme.primary.withValues(alpha: 0.14) : rowColor;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -607,13 +616,17 @@ class _TrackTileState extends State<_TrackTile> {
             decoration: BoxDecoration(
               color: isPendingDelete
                   ? colorScheme.errorContainer.withValues(alpha: 0.25)
-                  : rowColor,
+                  : selectionColor,
               borderRadius: BorderRadius.circular(6),
               border: isPendingDelete
                   ? Border.all(
                       color: colorScheme.error.withValues(alpha: 0.35),
                     )
-                  : null,
+                  : showSelection
+                      ? Border.all(
+                          color: colorScheme.primary.withValues(alpha: 0.4),
+                        )
+                      : null,
             ),
             child: Row(
               children: [
